@@ -12,7 +12,7 @@ Design notes:
 from __future__ import annotations
 
 import asyncio
-import json
+import os
 import random
 import time
 from typing import Any
@@ -39,7 +39,8 @@ from app.services.llm.prompts import (
     build_extraction_prompt,
     build_note_prompt,
 )
-from app.services.llm.schemas import ExtractionResult, NoteUpdate
+from app.services.llm.json_parse import extract_json_object
+from app.services.llm.schemas import ExtractionResult, NoteUpdate, coerce_llm_payload
 
 logger = get_logger(__name__)
 
@@ -76,10 +77,28 @@ class GeminiProvider(LLMProvider):
             raise LLMNotConfigured("GEMINI_API_KEY is not set.")
         try:
             from google import genai  # noqa: PLC0415  (lazy import keeps startup fast)
+            from google.genai import types  # noqa: PLC0415
         except ImportError as exc:  # pragma: no cover - dependency is in requirements.txt
             raise LLMUnavailable("google-genai is not installed. Run: pip install -U google-genai") from exc
-        self._client = genai.Client(api_key=self.api_key)
-        logger.info("gemini_client_initialised", extra={"model": self.model})
+
+        http_options = None
+        client_args: dict[str, Any] = {}
+        async_client_args: dict[str, Any] = {}
+        if not settings.gemini_verify_ssl:
+            client_args["verify"] = False
+            async_client_args["verify"] = False
+        proxy = settings.gemini_http_proxy or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        if proxy:
+            client_args["proxy"] = proxy
+            async_client_args["proxy"] = proxy
+        if client_args or async_client_args:
+            http_options = types.HttpOptions(
+                client_args=client_args or None,
+                async_client_args=async_client_args or None,
+            )
+
+        self._client = genai.Client(api_key=self.api_key, http_options=http_options)
+        logger.info("gemini_client_initialised", extra={"model": self.model, "verify_ssl": settings.gemini_verify_ssl})
         return self._client
 
     @staticmethod
@@ -175,34 +194,26 @@ class GeminiProvider(LLMProvider):
         text = (getattr(response, "text", None) or "").strip()
         if not text:
             raise LLMInvalidOutput("Gemini returned an empty response.")
-        payload = self._loads(text)
         try:
+            payload = coerce_llm_payload(extract_json_object(text), response_schema)
             return response_schema.model_validate(payload)
         except Exception as exc:
-            raise LLMInvalidOutput(f"Gemini output failed schema validation: {exc}") from exc
+            raise LLMInvalidOutput("Gemini returned JSON that was missing required clinical fields.") from exc
 
     @staticmethod
     def _loads(text: str) -> Any:
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("```")[1]
-            if cleaned.lstrip().lower().startswith("json"):
-                cleaned = cleaned.lstrip()[4:]
-        try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError as exc:
-            start, end = cleaned.find("{"), cleaned.rfind("}")
-            if 0 <= start < end:
-                try:
-                    return json.loads(cleaned[start : end + 1])
-                except json.JSONDecodeError:
-                    pass
-            raise LLMInvalidOutput(f"Gemini returned malformed JSON: {exc}") from exc
+        return extract_json_object(text)
 
     @staticmethod
     def _map_exception(exc: Exception) -> LLMError:
         message = str(exc).lower()
         status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+        if any(marker in message for marker in ("fortiguard", "web page blocked", "access blocked", "web filter", "intrusion prevention", "internet usage policy")):
+            error = LLMUnavailable("Gemini was blocked by your local network firewall (FortiGuard Web Filter: Artificial Intelligence Category). Connect to a mobile hotspot or VPN to reach Gemini.")
+            error.retryable = False
+            return error
+        if "certificate verify failed" in message or "unable to get local issuer certificate" in message:
+            return LLMUnavailable("Gemini SSL certificate verification failed. Set GEMINI_VERIFY_SSL=false in .env to allow connections through TLS-inspecting networks.")
         if status in (401, 403) or any(marker in message for marker in _AUTH_MARKERS):
             return LLMAuthError(f"Gemini authentication failed: {exc}")
         if status == 429 or any(marker in message for marker in _RATE_MARKERS):

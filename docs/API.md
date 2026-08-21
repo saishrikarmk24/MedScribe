@@ -86,7 +86,7 @@ JSON counters and duration observations. Add `?prometheus=true` for Prometheus t
 
 ```json
 {
-  "name": "Outpatient chest discomfort simulation",
+  "name": "Outpatient chest discomfort encounter",
   "patient_id": "SIM-PT-0042",
   "scenario": "Standardised patient reporting intermittent chest discomfort",
   "simulation_type": "OUTPATIENT",
@@ -97,7 +97,7 @@ JSON counters and duration observations. Add `?prometheus=true` for Prometheus t
 }
 ```
 
-- `simulation_type`: `OSCE | WARD_ROUND | OUTPATIENT | EMERGENCY | TEACHING | OTHER`
+- `simulation_type` (encounter type): `OSCE | WARD_ROUND | OUTPATIENT | EMERGENCY | TEACHING | OTHER`
 - `mode`: `DEMO | MICROPHONE | UPLOAD`
 - `audio_source`: `SIMULATION | MICROPHONE | UPLOAD` (defaulted from `mode`)
 
@@ -122,7 +122,7 @@ Cascades to transcript, entities, note, versions and evidence. Requires `DOCTOR`
 
 | Endpoint | Effect |
 | --- | --- |
-| `POST /api/sessions/{id}/start` | `CREATED → LIVE`; creates the runtime, and in Demo Mode starts the simulation driver |
+| `POST /api/sessions/{id}/start` | `CREATED → LIVE`; creates the runtime, and in Demo Mode starts the demo driver |
 | `POST /api/sessions/{id}/pause` | `LIVE → PAUSED`; audio ingestion suspends, state is preserved |
 | `POST /api/sessions/{id}/resume` | `PAUSED → LIVE` |
 | `POST /api/sessions/{id}/stop` | runs a final structuring pass, then `→ REVIEW` |
@@ -405,7 +405,7 @@ Stages: `AUDIO_CAPTURE, AUDIO_PREPROCESSING, DIARIZATION, ROLE_ATTRIBUTION, ASR,
 | `ALLOW_SQLITE_FALLBACK` | `true` | development convenience; disable in production |
 | `AUTO_CREATE_SCHEMA` | `true` | create tables at startup instead of running Alembic |
 | `ENABLE_DEMO_MODE` | `true` | allow Demo Mode sessions |
-| `DEMO_SEGMENT_INTERVAL_SECONDS` | `2.5` | pacing between simulated utterances |
+| `DEMO_SEGMENT_INTERVAL_SECONDS` | `2.5` | pacing between demo utterances |
 | `ASR_PROVIDER` | `mock` | `mock` or `faster_whisper` |
 | `DIARIZATION_PROVIDER` | `mock` | `mock` or `pyannote` |
 | `HUGGINGFACE_TOKEN` | — | required by pyannote |

@@ -1,0 +1,3 @@
+const apiBase = document.getElementById('apiBase'); const appBase = document.getElementById('appBase'); const saved = document.getElementById('saved');
+chrome.storage.sync.get({ apiBase: 'http://127.0.0.1:8000/api', appBase: 'http://127.0.0.1:5173' }, (settings) => { apiBase.value = settings.apiBase; appBase.value = settings.appBase });
+document.getElementById('save').addEventListener('click', () => { chrome.storage.sync.set({ apiBase: apiBase.value.trim().replace(/\/$/, ''), appBase: appBase.value.trim().replace(/\/$/, '') }, () => { saved.hidden = false; setTimeout(() => { saved.hidden = true }, 1800) }) });

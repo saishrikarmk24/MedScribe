@@ -9,7 +9,7 @@ from app.models.enums import UserRole
 
 
 class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Simulation participant. The prototype uses a development user system."""
+    """Participant. The prototype uses a development user system."""
 
     __tablename__ = "users"
 

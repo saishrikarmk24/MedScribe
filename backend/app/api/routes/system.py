@@ -74,7 +74,9 @@ async def check_ai() -> dict:
     """Live connectivity probe for the configured AI provider."""
     provider = get_llm_provider(refresh=True)
     result = await provider.check_connection()
-    return {"provider": provider.name, "mock": provider.is_mock, **result}
+    ok = bool(result.get("connected") or result.get("ok"))
+    detail = result.get("error") or result.get("sample") or ("Reachable" if ok else "Unavailable")
+    return {"provider": provider.name, "mock": provider.is_mock, "ok": ok, "detail": detail, **result}
 
 
 @router.get("/metrics", response_model=None)

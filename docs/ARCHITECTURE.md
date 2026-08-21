@@ -59,7 +59,7 @@ The browser hook (`useMicrophoneCapture`) captures at 16 kHz mono, encodes PCM16
 
 `decode → mono → resample to 16 kHz → high-pass → noise suppression → echo-cancellation hook → VAD → framing`
 
-Implemented with the standard library only (`audioop` was removed in Python 3.13, and pulling numpy/librosa in would make Demo Mode heavy). Simulation buffers are small enough that pure Python is fast enough, and the class is a drop-in seam for a vectorised implementation. Echo cancellation is an explicit documented pass-through — browser capture provides no far-end reference signal, so faking a filter would be dishonest.
+Implemented with the standard library only (`audioop` was removed in Python 3.13, and pulling numpy/librosa in would make Demo Mode heavy). Demo buffers are small enough that pure Python is fast enough, and the class is a drop-in seam for a vectorised implementation. Echo cancellation is an explicit documented pass-through — browser capture provides no far-end reference signal, so faking a filter would be dishonest.
 
 Output is an `AudioFrame`: canonical PCM16 samples plus speech ratio, RMS dBFS and a timeline window.
 

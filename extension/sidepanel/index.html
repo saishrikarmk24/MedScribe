@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MedScribe Meet Capture</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div class="eyebrow"><span class="cross">+</span> MEDSCRIBE LIVE</div>
+        <h1>Record Google Meet</h1>
+        <p>Capture this Meet tab and send it through MedScribe’s transcript, note, and evidence pipeline.</p>
+      </header>
+
+      <section class="notice" aria-label="Clinical safety notice">
+        Documents what was said. It does not diagnose or recommend treatment. Human review is required.
+      </section>
+
+      <section class="card" id="setupCard">
+        <div class="card-title"><span>SESSION DETAILS</span><button class="link-button" id="settingsButton">Settings</button></div>
+        <label>Session name<input id="sessionName" value="Google Meet session" /></label>
+        <label>Patient ID<input id="patientId" value="SIM-PT-GMEET" /></label>
+        <label>Encounter type
+          <select id="encounterType">
+            <option value="OUTPATIENT">Outpatient consultation</option>
+            <option value="OSCE">OSCE / examination</option>
+            <option value="WARD_ROUND">Ward round</option>
+            <option value="EMERGENCY">Emergency scenario</option>
+            <option value="TEACHING">Teaching session</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </label>
+        <label>Doctor<input id="doctorName" placeholder="Dr. A. Rao" /></label>
+        <label>Scenario<input id="scenario" value="Remote doctor–patient encounter captured from Google Meet" /></label>
+        <button class="primary" id="createButton">Create session</button>
+      </section>
+
+      <section class="card hidden" id="captureCard">
+        <div class="card-title"><span>MEET CAPTURE</span><span id="sessionReference" class="reference"></span></div>
+        <p id="sessionDisplay" class="session-display"></p>
+        <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Ready to capture this tab</span></div>
+        <div class="mic-status" id="micStatus">
+          <span id="micDot" class="dot"></span>
+          <span id="micText">Microphone: waiting to start</span>
+        </div>
+        <p class="mic-error hidden" id="micError" role="alert"></p>
+        <div class="meter-row"><span>Audio level</span><div class="meter"><i id="levelBar"></i></div></div>
+        <div class="duration" id="duration">00:00</div>
+        <button class="record" id="recordButton">Start recording</button>
+        <button class="secondary" id="discardButton">Discard recording</button>
+        <button class="secondary" id="reviewButton">Open review in MedScribe</button>
+        <p class="hint">Open this panel from the active Google Meet tab. Keep it open while recording; Chrome will show its sharing indicator.</p>
+      </section>
+
+      <p class="error hidden" id="errorMessage" role="alert"></p>
+    </main>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

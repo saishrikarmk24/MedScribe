@@ -22,7 +22,7 @@ import { api, downloadBlob } from '@/services/api'
 import { useSessionStore } from '@/store/sessionStore'
 import { useUiStore } from '@/store/uiStore'
 import type { ExportFormat, NoteSectionKey, NoteVersion } from '@/types'
-import { formatConfidence, formatDateTime, formatDuration } from '@/utils/format'
+import { formatDateTime, formatDuration } from '@/utils/format'
 
 export function ReviewPage() {
   const { id } = useParams<{ id: string }>()
@@ -69,16 +69,8 @@ export function ReviewPage() {
 
   const stats = useMemo(() => {
     const validated = evidence.filter((link) => link.validated).length
-    const sectionConfidences = note
-      ? Object.values(note.content)
-          .filter((value): value is { confidence: number } => typeof value === 'object' && value !== null && 'confidence' in value)
-          .map((value) => value.confidence)
-      : []
-    const average = sectionConfidences.length
-      ? sectionConfidences.reduce((sum, value) => sum + value, 0) / sectionConfidences.length
-      : 0
-    return { validated, total: evidence.length, average }
-  }, [evidence, note])
+    return { validated, total: evidence.length }
+  }, [evidence])
 
   const highlightedRefs = useMemo(() => {
     if (!evidenceFocus) return []
@@ -229,7 +221,6 @@ export function ReviewPage() {
         <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
           <div className="grid grid-cols-2 gap-2">
             <StatCard label="Evidence links" value={`${stats.validated}/${stats.total}`} detail="validated" />
-            <StatCard label="Avg confidence" value={formatConfidence(stats.average)} detail="section level" />
             <StatCard label="Entities" value={entities.length} detail="extracted" />
             <StatCard
               label="Note status"
@@ -270,7 +261,7 @@ export function ReviewPage() {
                     className="mt-0.5 h-3.5 w-3.5 rounded border-navy-300 text-teal-600 focus:ring-teal-500"
                   />
                   <span>
-                    I have read this note and its supporting evidence. I confirm it reflects the simulated encounter and
+                    I have read this note and its supporting evidence. I confirm it reflects the encounter and
                     accept clinical responsibility for the documentation.
                   </span>
                 </label>
@@ -316,13 +307,8 @@ export function ReviewPage() {
           <Panel title="Session metadata" icon={<Stethoscope className="h-3.5 w-3.5" aria-hidden />} bodyClassName="p-3">
             <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-2xs">
               <Meta label="Scenario" value={session.scenario ?? '—'} />
-              <Meta label="Simulation type" value={session.simulation_type} />
+              <Meta label="Encounter type" value={session.simulation_type} />
               <Meta label="Doctor" value={session.doctor_name ?? '—'} />
-              <Meta label="Faculty" value={session.faculty_name ?? '—'} />
-              <Meta label="Mode" value={session.mode} />
-              <Meta label="Audio source" value={session.audio_source} />
-              <Meta label="AI mode" value={session.ai_mode} />
-              <Meta label="Model" value={session.model_name} />
               <Meta label="Started" value={formatDateTime(session.started_at)} />
               <Meta label="Ended" value={formatDateTime(session.ended_at)} />
             </dl>

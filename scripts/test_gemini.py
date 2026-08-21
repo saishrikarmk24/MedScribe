@@ -5,7 +5,7 @@
 
 Checks: API connectivity, schema-constrained structured output, Pydantic
 validation, entity extraction, negation handling, evidence references and full
-note generation against the reference simulated conversation.
+note generation against the reference demo conversation.
 
 Requires GEMINI_API_KEY (see .env.example). Without a key the script explains
 what to do and exits with a non-zero status.

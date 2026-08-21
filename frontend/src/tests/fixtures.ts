@@ -130,7 +130,7 @@ export const note: ClinicalNote = {
     chief_complaint: section('Chest discomfort since yesterday evening.'),
     history_of_present_illness: section('Patient reports intermittent pressure-like chest discomfort.'),
     relevant_medical_history: section('Not mentioned', []),
-    assessment: section('Not mentioned', []),
+    assessment: section('Pending clinical evaluation', []),
     plan: section('Not mentioned', []),
     follow_up: section('Not mentioned', []),
     symptoms: entities,
@@ -170,7 +170,7 @@ export const evidence: EvidenceLink[] = [
 export const session: Session = {
   id: 'session-1',
   reference: 'SIM-2026-001',
-  name: 'Outpatient chest discomfort simulation',
+  name: 'Outpatient chest discomfort',
   patient_id: 'SIM-PT-0042',
   scenario: 'Standardised patient reporting chest discomfort',
   simulation_type: 'OUTPATIENT',

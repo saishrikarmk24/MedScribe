@@ -15,7 +15,7 @@ import { formatConfidence } from '@/utils/format'
  */
 export function SpeakerRoster({
   speakers,
-  editable = true,
+  editable = false,
   compact = false,
   onChanged,
 }: {

@@ -23,13 +23,16 @@ class AIMode(str, Enum):
 
 
 class ASRProviderName(str, Enum):
-    MOCK = "mock"
+    GEMINI = "gemini"
     FASTER_WHISPER = "faster_whisper"
+    MOCK = "mock"
 
 
 class DiarizationProviderName(str, Enum):
-    MOCK = "mock"
+    GEMINI = "gemini"
+    LOCAL = "local"
     PYANNOTE = "pyannote"
+    MOCK = "mock"
 
 
 class Settings(BaseSettings):
@@ -50,8 +53,10 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.7-flash"
     ai_mode: AIMode = AIMode.GEMINI
+    gemini_verify_ssl: bool = True
+    gemini_http_proxy: str | None = None
     gemini_update_interval_seconds: float = 10.0
     gemini_min_segments_per_update: int = 3
     gemini_timeout_seconds: float = 45.0
@@ -65,16 +70,24 @@ class Settings(BaseSettings):
     db_echo: bool = False
     auto_create_schema: bool = True
 
-    # --- simulation --------------------------------------------------------
+    # --- demo mode ---------------------------------------------------------
     enable_demo_mode: bool = True
     demo_segment_interval_seconds: float = 2.5
 
     # --- pipeline providers ------------------------------------------------
-    asr_provider: ASRProviderName = ASRProviderName.MOCK
-    diarization_provider: DiarizationProviderName = DiarizationProviderName.MOCK
+    asr_provider: ASRProviderName = ASRProviderName.FASTER_WHISPER
+    diarization_provider: DiarizationProviderName = DiarizationProviderName.LOCAL
     faster_whisper_model: str = "small.en"
     pyannote_model: str = "pyannote/speaker-diarization-3.1"
     huggingface_token: str | None = None
+
+    # Gemini audio transcription. The ASR model is configurable separately from
+    # the structuring model because transcription is the more latency-sensitive
+    # call and may warrant a cheaper/faster model.
+    gemini_asr_model: str | None = None
+    gemini_asr_timeout_seconds: float = 180.0
+    gemini_asr_max_retries: int = 2
+    asr_max_audio_bytes: int = 48 * 1024 * 1024
 
     # --- audio -------------------------------------------------------------
     audio_sample_rate: int = 16000
@@ -90,6 +103,13 @@ class Settings(BaseSettings):
 
     # --- monitoring --------------------------------------------------------
     enable_metrics: bool = True
+
+    @field_validator("ai_mode", mode="before")
+    @classmethod
+    def _retired_groq_mode(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip().lower() == "groq":
+            return AIMode.GEMINI.value
+        return value
 
     @field_validator("gemini_api_key", "huggingface_token", mode="before")
     @classmethod
@@ -107,11 +127,16 @@ class Settings(BaseSettings):
         return bool(self.gemini_api_key)
 
     @property
+    def effective_gemini_asr_model(self) -> str:
+        return self.gemini_asr_model or self.gemini_model
+
+    @property
     def effective_ai_mode(self) -> AIMode:
-        """Gemini is only used when a key is actually present."""
-        if self.ai_mode is AIMode.GEMINI and not self.gemini_configured:
+        if self.ai_mode is AIMode.MOCK:
             return AIMode.MOCK
-        return self.ai_mode
+        if self.gemini_configured:
+            return AIMode.GEMINI
+        return AIMode.MOCK
 
     @property
     def audio_storage_path(self) -> Path:

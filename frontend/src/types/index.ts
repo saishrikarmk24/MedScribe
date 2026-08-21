@@ -11,7 +11,7 @@ export type SessionStatus =
 
 export type SessionMode = 'DEMO' | 'MICROPHONE' | 'UPLOAD'
 export type AudioSource = 'MICROPHONE' | 'UPLOAD' | 'SIMULATION'
-export type SimulationType = 'OSCE' | 'WARD_ROUND' | 'OUTPATIENT' | 'EMERGENCY' | 'TEACHING' | 'OTHER'
+export type EncounterType = 'OSCE' | 'WARD_ROUND' | 'OUTPATIENT' | 'EMERGENCY' | 'TEACHING' | 'OTHER'
 
 export type SpeakerRole = 'DOCTOR' | 'PATIENT' | 'NURSE' | 'STAFF' | 'BACKGROUND' | 'UNKNOWN'
 
@@ -185,7 +185,7 @@ export interface Session {
   name: string
   patient_id: string
   scenario: string | null
-  simulation_type: SimulationType
+  simulation_type: EncounterType
   doctor_name: string | null
   faculty_name: string | null
   status: SessionStatus
@@ -213,7 +213,7 @@ export interface SessionSummary {
   patient_id: string
   status: SessionStatus
   mode: SessionMode
-  simulation_type: SimulationType
+  simulation_type: EncounterType
   created_at: string
   started_at: string | null
   ended_at: string | null
@@ -258,7 +258,12 @@ export interface SystemStatus {
     url: string
     error?: string
   }
-  ai: Record<string, unknown> & { provider: string; model: string; mode: string; gemini_configured: boolean }
+  ai: Record<string, unknown> & {
+    provider: string
+    model: string
+    mode: string
+    gemini_configured: boolean
+  }
   providers: {
     asr: { name: string; mock: boolean }
     diarization: { name: string; mock: boolean }

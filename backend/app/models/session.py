@@ -28,7 +28,7 @@ from app.models.enums import (
 
 
 class Session(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """A simulated clinical encounter and the root of the provenance chain."""
+    """A clinical encounter and the root of the provenance chain."""
 
     __tablename__ = "sessions"
 
@@ -103,7 +103,7 @@ class Speaker(UUIDPrimaryKeyMixin, Base):
 
 
 class AudioChunk(UUIDPrimaryKeyMixin, Base):
-    """Metadata for a captured/simulated audio buffer after preprocessing."""
+    """Metadata for a captured audio buffer after preprocessing."""
 
     __tablename__ = "audio_chunks"
 

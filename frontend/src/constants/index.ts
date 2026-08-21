@@ -155,7 +155,7 @@ export const PIPELINE_STAGES: { stage: ProcessingStage; label: string }[] = [
   { stage: 'NOTE_STATE', label: 'Note state engine' },
 ]
 
-export const SIMULATION_TYPES: { value: string; label: string }[] = [
+export const ENCOUNTER_TYPES: { value: string; label: string }[] = [
   { value: 'OSCE', label: 'OSCE / examination' },
   { value: 'WARD_ROUND', label: 'Ward round' },
   { value: 'OUTPATIENT', label: 'Outpatient consultation' },
@@ -165,5 +165,5 @@ export const SIMULATION_TYPES: { value: string; label: string }[] = [
 ]
 
 export const SAFETY_NOTICE =
-  'MedScribe Live documents what was said in a simulated encounter. It does not diagnose, ' +
+  'MedScribe Live documents what was said in the encounter. It does not diagnose, ' +
   'recommend treatment, or replace clinical judgement. Human review is required.'

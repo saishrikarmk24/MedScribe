@@ -92,7 +92,7 @@ async def main(base: str) -> int:
             await client.post(
                 "/api/sessions",
                 json={
-                    "name": "Verification chest discomfort simulation",
+                    "name": "Verification chest discomfort encounter",
                     "patient_id": "SIM-PT-VERIFY",
                     "scenario": "Standardised patient reporting chest discomfort",
                     "simulation_type": "OUTPATIENT",

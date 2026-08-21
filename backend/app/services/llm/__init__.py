@@ -29,13 +29,14 @@ _fallback: DeterministicLLMProvider | None = None
 
 
 def build_llm_provider() -> LLMProvider:
-    """Return the configured provider (Gemini unless it cannot be used)."""
-    if settings.effective_ai_mode is AIMode.GEMINI:
+    """Gemini when a key is set; otherwise the rule-based mock."""
+    mode = settings.effective_ai_mode
+    if mode is AIMode.GEMINI:
         from app.services.llm.gemini_provider import GeminiProvider
 
         return GeminiProvider()
     if settings.ai_mode is AIMode.GEMINI and not settings.gemini_configured:
-        logger.warning("gemini_not_configured_using_rule_based_provider")
+        logger.warning("no_cloud_llm_configured_using_rule_based_provider")
     return DeterministicLLMProvider()
 
 

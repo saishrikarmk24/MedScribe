@@ -7,7 +7,12 @@ settings singleton picks up the test database and the offline AI mode.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+if str(BACKEND_DIR) not in sys.path or sys.path[0] != str(BACKEND_DIR):
+    sys.path.insert(0, str(BACKEND_DIR))
 
 TEST_DB = Path(__file__).resolve().parent / "medscribe_test.db"
 
@@ -48,7 +53,7 @@ async def database():
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield db_state
-    # Stop simulation drivers before the loop closes, otherwise their database
+    # Stop demo drivers before the loop closes, otherwise their database
     # connections outlive it and surface as unrelated teardown warnings.
     for session_id in list(pipeline.active_sessions()):
         runtime = pipeline.runtime(session_id)
@@ -87,7 +92,7 @@ def session_payload() -> dict:
         "patient_id": "SIM-PT-014",
         "scenario": "chest_discomfort",
         "simulation_type": "OSCE",
-        "doctor_name": "Dr. Simulation",
+        "doctor_name": "Dr. Demo",
         "faculty_name": "Prof. Faculty",
         "mode": SessionMode.DEMO.value,
     }

@@ -97,7 +97,7 @@ async def test_json_export_contains_the_full_provenance_chain(client, session_pa
 
     payload = json.loads(response.content)
     assert payload["export_format"] == "MEDSCRIBE_JSON_V1"
-    assert "Simulated encounter" in payload["disclaimer"]
+    assert "human review" in payload["disclaimer"].lower()
     assert payload["session"]["reference"] == session["reference"]
     assert len(payload["transcript"]) == 10
     assert payload["clinical_entities"]

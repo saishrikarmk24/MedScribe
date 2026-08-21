@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { FlaskConical, Mic, PlayCircle, Sparkles, Upload } from 'lucide-react'
 
 import { InlineAlert, Panel, Spinner } from '@/components/ui/primitives'
-import { SIMULATION_TYPES } from '@/constants'
+import { ENCOUNTER_TYPES } from '@/constants'
 import { api } from '@/services/api'
 import { useUiStore } from '@/store/uiStore'
 import type { SessionMode } from '@/types'
@@ -11,32 +11,31 @@ import { cn } from '@/utils/cn'
 
 const MODES: { value: SessionMode; label: string; detail: string; icon: typeof Mic }[] = [
   {
-    value: 'DEMO',
-    label: 'Demo Simulation',
-    detail: 'Synthetic conversation replayed through the real pipeline. No microphone needed.',
-    icon: FlaskConical,
-  },
-  {
     value: 'MICROPHONE',
-    label: 'Microphone',
-    detail: 'Browser capture at 16 kHz mono, streamed to the backend in 2-second chunks.',
+    label: 'Microphone (live)',
+    detail: 'Record the real encounter in the browser. Your speech is transcribed when you press Stop.',
     icon: Mic,
   },
   {
     value: 'UPLOAD',
     label: 'Uploaded Recording',
-    detail: 'Upload a WAV recording of a simulated encounter and process it in one pass.',
+    detail: 'Upload a recording of a real encounter and transcribe it in one pass.',
     icon: Upload,
+  },
+  {
+    value: 'DEMO',
+    label: 'Demo',
+    detail: 'Scripted conversation replayed through the pipeline. No real audio is transcribed.',
+    icon: FlaskConical,
   },
 ]
 
 const DEFAULTS = {
-  name: 'Outpatient chest discomfort simulation',
+  name: 'Outpatient chest discomfort',
   patient_id: 'SIM-PT-0042',
   scenario: 'Standardised patient reporting intermittent chest discomfort',
   simulation_type: 'OUTPATIENT',
   doctor_name: 'Dr. A. Rao',
-  faculty_name: 'Prof. M. Iyer',
 }
 
 export function NewSessionPage() {
@@ -45,7 +44,9 @@ export function NewSessionPage() {
   const identityName = useUiStore((state) => state.identityName)
 
   const [form, setForm] = useState({ ...DEFAULTS, doctor_name: DEFAULTS.doctor_name })
-  const [mode, setMode] = useState<SessionMode>('DEMO')
+  // Real microphone capture is the default; Demo Mode has to be chosen deliberately
+  // so a scripted transcript can never be mistaken for a recorded encounter.
+  const [mode, setMode] = useState<SessionMode>('MICROPHONE')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scripts, setScripts] = useState<{ key: string; title: string; description: string; utterances: number }[]>([])
@@ -79,7 +80,7 @@ export function NewSessionPage() {
         scenario: form.scenario.trim() || null,
         simulation_type: form.simulation_type,
         doctor_name: form.doctor_name.trim() || identityName,
-        faculty_name: form.faculty_name.trim() || null,
+        faculty_name: null,
         mode,
         audio_source: audioSource,
       })
@@ -101,7 +102,7 @@ export function NewSessionPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl space-y-4 p-5">
         <header>
-          <h1 className="text-lg font-semibold tracking-tight text-navy-900">New Simulation Session</h1>
+          <h1 className="text-lg font-semibold tracking-tight text-navy-900">New Session</h1>
           <p className="text-xs text-navy-500">
             Use synthetic patient identifiers only. Nothing entered here should reference a real patient.
           </p>
@@ -119,13 +120,13 @@ export function NewSessionPage() {
             <input className="field-input" value={form.name} onChange={update('name')} required />
           </label>
           <label>
-            <span className="field-label">Simulated patient ID</span>
+            <span className="field-label">Patient ID</span>
             <input className="field-input mono" value={form.patient_id} onChange={update('patient_id')} required />
           </label>
           <label>
-            <span className="field-label">Simulation type</span>
+            <span className="field-label">Encounter type</span>
             <select className="field-input" value={form.simulation_type} onChange={update('simulation_type')}>
-              {SIMULATION_TYPES.map((type) => (
+              {ENCOUNTER_TYPES.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -139,10 +140,6 @@ export function NewSessionPage() {
           <label>
             <span className="field-label">Doctor</span>
             <input className="field-input" value={form.doctor_name} onChange={update('doctor_name')} />
-          </label>
-          <label>
-            <span className="field-label">Faculty / Instructor</span>
-            <input className="field-input" value={form.faculty_name} onChange={update('faculty_name')} />
           </label>
         </Panel>
 
@@ -188,9 +185,23 @@ export function NewSessionPage() {
               </div>
             ))}
             <p className="mt-2 text-2xs leading-relaxed text-navy-500">
-              Demo Mode drives mock diarization and mock ASR from synthesised audio, then runs the real clinical
-              structuring layer — so the intelligence you see is genuine, only the audio is synthetic.
+              Demo Mode replays this script through the real clinical structuring layer, so the intelligence you see
+              is genuine while the audio is synthetic. It does not use your microphone and does not transcribe real
+              speech — choose <span className="font-semibold">Microphone (live)</span> for that.
             </p>
+          </Panel>
+        ) : null}
+
+        {mode === 'MICROPHONE' ? (
+          <Panel title="Before you record" bodyClassName="p-4">
+            <ul className="space-y-1 text-2xs leading-relaxed text-navy-500">
+              <li>The browser will ask for microphone permission the first time you press Record.</li>
+              <li>Speak the encounter, then press Stop to transcribe the recording you just made.</li>
+              <li>
+                Transcription requires the backend to have a configured speech provider. If it does not, you will get
+                an explicit error rather than sample content.
+              </li>
+            </ul>
           </Panel>
         ) : null}
 
@@ -202,7 +213,7 @@ export function NewSessionPage() {
             onClick={() => void submit(true)}
           >
             {submitting ? <Spinner className="text-white" /> : <PlayCircle className="h-4 w-4" aria-hidden />}
-            Start Simulation
+            Start Session
           </button>
           <button
             type="button"
@@ -214,7 +225,7 @@ export function NewSessionPage() {
             }}
           >
             <FlaskConical className="h-4 w-4" aria-hidden />
-            Load Demo
+            Run Scripted Demo
           </button>
           <button type="button" className="btn-secondary" disabled={submitting} onClick={() => void submit(false)}>
             Create without starting

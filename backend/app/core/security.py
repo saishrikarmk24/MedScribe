@@ -112,7 +112,7 @@ class EncryptedStorage:
         return {
             "encryption_at_rest": self.enabled,
             "retention_days": settings.data_retention_days,
-            "note": "Simulation data only. Enable a KMS backend before any real clinical use.",
+            "note": "Enable a KMS backend before any real clinical use.",
         }
 
 

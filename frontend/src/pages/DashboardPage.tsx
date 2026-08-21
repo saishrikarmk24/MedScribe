@@ -1,15 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Activity,
-  BadgeCheck,
-  BrainCircuit,
-  ClipboardList,
-  FileCheck2,
-  PlusCircle,
-  ShieldAlert,
-  Timer,
-} from 'lucide-react'
+import { Activity, ClipboardList, FileCheck2, PlusCircle, ShieldAlert } from 'lucide-react'
 import {
   Bar,
   BarChart,
@@ -24,25 +15,23 @@ import {
 import { InlineAlert, Panel, Spinner, StatCard, StatusDot } from '@/components/ui/primitives'
 import { NOTE_STATUS_LABELS, SESSION_STATUS_STYLES } from '@/constants'
 import { api } from '@/services/api'
-import type { DashboardStats, NoteStatus, SystemStatus } from '@/types'
+import type { DashboardStats, NoteStatus } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatDuration, formatLatency, formatRelative, titleCase } from '@/utils/format'
+import { formatDuration, formatRelative, titleCase } from '@/utils/format'
 
 const BAR_COLORS = ['#159f94', '#2563eb', '#7c3aed', '#b45309', '#0d9488', '#3c6795']
 
 export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [status, setStatus] = useState<SystemStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     const load = async () => {
       try {
-        const [nextStats, nextStatus] = await Promise.all([api.dashboard(), api.status()])
+        const nextStats = await api.dashboard()
         if (cancelled) return
         setStats(nextStats)
-        setStatus(nextStatus)
         setError(null)
       } catch (err) {
         if (!cancelled) setError((err as Error).message)
@@ -75,8 +64,6 @@ export function DashboardPage() {
     )
   }
 
-  const aiConfigured = Boolean(status?.ai.gemini_configured)
-
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-7xl space-y-4 p-5">
@@ -84,24 +71,16 @@ export function DashboardPage() {
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-navy-900">Documentation Overview</h1>
             <p className="text-xs text-navy-500">
-              Synthetic simulation data only. Every note requires human review before approval.
+              Every note requires human review before approval.
             </p>
           </div>
           <Link to="/sessions/new" className="btn-primary">
             <PlusCircle className="h-4 w-4" aria-hidden />
-            New Simulation
+            New Session
           </Link>
         </header>
 
-        {!aiConfigured ? (
-          <InlineAlert kind="warning" title="Gemini API key not configured">
-            The backend is running the deterministic rule-based provider so the demo stays usable. Add{' '}
-            <code className="mono">GEMINI_API_KEY</code> to <code className="mono">.env</code> and restart the backend to
-            enable live Gemini structuring.
-          </InlineAlert>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             label="Active"
             value={stats.active_sessions}
@@ -127,18 +106,6 @@ export function DashboardPage() {
             detail="human action needed"
             tone={stats.review_required_count > 0 ? 'review' : 'default'}
             icon={<ShieldAlert className="h-4 w-4" aria-hidden />}
-          />
-          <StatCard
-            label="Note latency"
-            value={formatLatency(stats.average_note_latency_ms)}
-            detail="avg structuring pass"
-            icon={<Timer className="h-4 w-4" aria-hidden />}
-          />
-          <StatCard
-            label="AI latency"
-            value={formatLatency(stats.average_gemini_latency_ms)}
-            detail={status?.ai.model ? String(status.ai.model) : 'provider call'}
-            icon={<BrainCircuit className="h-4 w-4" aria-hidden />}
           />
         </div>
 
@@ -262,62 +229,7 @@ export function DashboardPage() {
             </table>
           )}
         </Panel>
-
-        <Panel title="System status" bodyClassName="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatusTile
-            label="Database"
-            value={status?.database.dialect === 'sqlite' ? 'SQLite (development)' : 'PostgreSQL'}
-            ok={Boolean(status?.database.connected)}
-            detail={status?.database.using_fallback ? 'Running on SQLite fallback' : status?.database.url}
-          />
-          <StatusTile
-            label="AI provider"
-            value={status ? `${status.ai.provider} · ${status.ai.model}` : '—'}
-            ok={aiConfigured}
-            detail={aiConfigured ? 'Gemini key configured' : 'Deterministic rule-based fallback'}
-          />
-          <StatusTile
-            label="ASR / Diarization"
-            value={status ? `${status.providers.asr.name} · ${status.providers.diarization.name}` : '—'}
-            ok={Boolean(status)}
-            detail={
-              status?.providers.asr.mock
-                ? 'Mock providers (Faster-Whisper & pyannote adapters ready)'
-                : 'Real providers active'
-            }
-          />
-          <StatusTile
-            label="Realtime"
-            value={status ? `${status.websocket.connections} client(s)` : '—'}
-            ok={Boolean(status)}
-            detail={status ? `${status.websocket.sessions} session channel(s)` : undefined}
-          />
-        </Panel>
       </div>
-    </div>
-  )
-}
-
-function StatusTile({
-  label,
-  value,
-  ok,
-  detail,
-}: {
-  label: string
-  value: string
-  ok: boolean
-  detail?: string
-}) {
-  return (
-    <div className="rounded border border-navy-200/70 bg-white p-2.5">
-      <div className="flex items-center gap-1.5">
-        <StatusDot className={ok ? 'bg-teal-500' : 'bg-amber-500'} />
-        <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-navy-500">{label}</p>
-        {ok ? <BadgeCheck className="ml-auto h-3.5 w-3.5 text-teal-500" aria-hidden /> : null}
-      </div>
-      <p className="mt-1 truncate text-xs font-medium text-navy-900">{value}</p>
-      {detail ? <p className="mt-0.5 break-all text-2xs text-navy-500">{detail}</p> : null}
     </div>
   )
 }

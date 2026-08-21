@@ -179,12 +179,12 @@ def test_gemini_rejects_malformed_json() -> None:
         provider._parse(FakeResponse(text="entities: not json at all"), ExtractionResult)
 
 
-def test_gemini_rejects_schema_violations() -> None:
+def test_gemini_drops_unknown_entity_types() -> None:
     provider = GeminiProvider(api_key="k")
-    with pytest.raises(LLMInvalidOutput):
-        provider._parse(
-            FakeResponse(text='{"entities": [{"entity_type": "NOT_A_TYPE", "value": "x"}]}'), ExtractionResult
-        )
+    result = provider._parse(
+        FakeResponse(text='{"entities": [{"entity_type": "NOT_A_TYPE", "value": "x"}]}'), ExtractionResult
+    )
+    assert result.entities == []
 
 
 def test_gemini_detects_safety_blocks() -> None:

@@ -15,9 +15,9 @@ from app.models.enums import (
 
 class SessionCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
-    patient_id: str = Field(min_length=1, max_length=64, description="Simulated patient identifier")
+    patient_id: str = Field(min_length=1, max_length=64, description="Patient identifier")
     scenario: str | None = None
-    simulation_type: SimulationType = SimulationType.OUTPATIENT
+    simulation_type: SimulationType = Field(default=SimulationType.OUTPATIENT, description="Encounter type")
     doctor_name: str | None = None
     faculty_name: str | None = None
     mode: SessionMode = SessionMode.DEMO

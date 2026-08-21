@@ -1,6 +1,6 @@
-"""Deterministic ASR provider used for simulations and Demo Mode.
+"""Deterministic ASR provider used for Demo Mode.
 
-The provider is driven by a *script*: the text of the simulated encounter is
+The provider is driven by a *script*: the text of the demo encounter is
 known in advance, and the provider emits the next utterance whenever voice
 activity is detected in the incoming audio frame. Timestamps, confidence and
 word offsets are produced exactly as a real engine would, so nothing downstream

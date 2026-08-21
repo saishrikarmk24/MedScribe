@@ -7,7 +7,7 @@ from typing import Any
 
 SYSTEM_INSTRUCTION = """\
 You are the clinical information extraction and documentation component of
-MedScribe Live, a hospital simulation and clinical education platform.
+MedScribe Live, a clinical documentation workstation.
 
 You are not a diagnostic system.
 
@@ -31,8 +31,9 @@ Do not recommend treatment.
 
 Do not make autonomous clinical decisions.
 
-If information is absent, return null, an empty list, or "Not mentioned"
-according to the schema.
+If information is absent, omit it: return null, an empty list, or an empty
+string. Do not write placeholder phrases such as "Not mentioned", "not found",
+or "N/A".
 
 Every clinically meaningful output must reference one or more source transcript
 segment IDs.
@@ -43,11 +44,12 @@ Additional rules:
 - A statement made by the patient is a report, not a confirmed finding. Attribute
   it accordingly in the narrative (for example "The patient reports ...").
 - ASSESSMENT may only restate what a clinician explicitly said in the
-  conversation. If no clinician stated an assessment, return "Not mentioned".
+  conversation. If no clinician stated an assessment, leave that section empty.
 - PLAN and FOLLOW_UP may only contain actions a clinician explicitly stated.
 - Never convert a symptom into a diagnosis, and never add a diagnosis because it
   is commonly associated with a symptom.
 - Keep narrative sections concise, factual and free of speculation.
+- When asked for JSON, reply with one JSON object only. No markdown, no preamble.
 """
 
 
@@ -77,9 +79,9 @@ def _format_timestamp(seconds: float) -> str:
 def _render_session_context(context: dict[str, Any]) -> str:
     fields = {
         "session_reference": context.get("reference"),
-        "simulation_type": context.get("simulation_type"),
+        "encounter_type": context.get("simulation_type"),
         "scenario": context.get("scenario") or "Not specified",
-        "simulated_patient_id": context.get("patient_id"),
+        "patient_id": context.get("patient_id"),
         "speakers": context.get("speakers", []),
         "elapsed_seconds": context.get("elapsed_seconds"),
     }
@@ -90,6 +92,23 @@ def _render_candidates(candidates: list[dict[str, Any]]) -> str:
     if not candidates:
         return "(no rule-based candidates)"
     return json.dumps(candidates, indent=2, default=str)
+
+
+_EXTRACTION_EXAMPLE = json.dumps(
+    {
+        "entities": [
+            {
+                "entity_type": "SYMPTOM",
+                "value": "fever",
+                "status": "PRESENT",
+                "confidence": 0.9,
+                "source_segment_ids": ["seg_001"],
+                "detail": None,
+            }
+        ],
+        "unsupported_content": [],
+    }
+)
 
 
 def build_extraction_prompt(
@@ -123,7 +142,10 @@ REQUIREMENTS
 4. Set status=HISTORICAL for past conditions or events framed in the past.
 5. Every entity must list at least one source_segment_id from the transcript.
 6. Put anything you cannot attribute to a segment id in unsupported_content.
-7. Return valid JSON matching the response schema exactly.
+7. Every entity object MUST include entity_type, value, status, confidence
+   (a number from 0 to 1), and source_segment_ids.
+8. Return JSON only, shaped exactly like:
+   {_EXTRACTION_EXAMPLE}
 """
 
 
@@ -136,7 +158,7 @@ def build_note_prompt(
 ) -> str:
     current = json.dumps(current_note, indent=2, default=str) if current_note else "(no note yet)"
     return f"""\
-TASK: Produce the structured clinical note for this simulated encounter.
+TASK: Produce the structured clinical note for this encounter.
 
 SESSION CONTEXT
 {_render_session_context(session_context)}
@@ -151,15 +173,16 @@ CURRENT NOTE STATE (revise it; do not discard still-valid documentation)
 {current}
 
 REQUIREMENTS
-1. Write each section from the transcript only. Use "Not mentioned" when the
-   conversation does not cover a section.
+1. Write each section from the transcript only. If a section was not discussed,
+   set its text to an empty string. Do not invent content and do not write
+   "Not mentioned", "not found", or similar placeholders.
 2. ASSESSMENT: restate only what a clinician explicitly said. Do not diagnose.
 3. PLAN and FOLLOW_UP: only clinician-stated actions.
 4. Attribute patient statements as reports ("The patient reports ...").
 5. Preserve negations explicitly ("Denies shortness of breath.").
 6. Preserve uncertainty explicitly ("Reports possible blurred vision, uncertain.").
-7. Every section must list the source_segment_ids that support its text. A
-   section whose text is "Not mentioned" must have an empty list.
+7. Every section must list the source_segment_ids that support its text. An
+   empty section must have an empty list.
 8. changed_sections must name only the sections whose text differs from the
    current note state.
 9. Return valid JSON matching the response schema exactly.

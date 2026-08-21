@@ -42,7 +42,7 @@ from app.models import (
 from app.schemas.clinical import ENTITY_KEYS, ClinicalEntityOut, ClinicalNoteContent
 from app.schemas.events import EventType, ProcessingStage
 from app.services import repository as repo
-from app.services.asr import ASRProvider, build_asr_provider
+from app.services.asr import ASRProvider, ASRUnavailable, build_asr_provider
 from app.services.audio import AudioPreprocessingService, RawAudio, SimulationAudioProvider
 from app.services.diarization import DiarizationService, build_diarization_provider
 from app.services.evidence import EvidenceLinkingService
@@ -72,6 +72,28 @@ ENTITY_GROUP_BY_TYPE: dict[EntityType, str] = {
     EntityType.FINDING: "findings",
     EntityType.INVESTIGATION: "investigations",
 }
+
+
+def _public_llm_message(provider: str, exc: LLMError) -> str:
+    label = {"gemini": "Gemini"}.get(provider, provider)
+    err_str = str(exc).lower()
+    if "blocked by your local network firewall" in err_str or "fortiguard" in err_str:
+        return f"{label} was blocked by your local network firewall (FortiGuard AI filter). Connect to a mobile hotspot or VPN to use Gemini."
+    if "ssl certificate verification failed" in err_str:
+        return f"{label} SSL verification failed. Set GEMINI_VERIFY_SSL=false in .env if on an inspected network."
+    if exc.code == "LLM_INVALID_OUTPUT":
+        return (
+            f"{label} replied, but the JSON was incomplete so it could not be used. "
+            "A draft note was filled from the transcript instead."
+        )
+    if exc.code == "LLM_UNAVAILABLE":
+        return f"{label} could not complete this request. A draft note was filled from the transcript instead."
+    if exc.code == "LLM_RATE_LIMIT":
+        return (
+            f"{label} hit its free-tier quota. This draft was filled from the transcript on this PC; "
+            "retry later when the quota resets."
+        )
+    return str(exc)[:240]
 
 
 @dataclass
@@ -146,14 +168,21 @@ class SessionPipeline:
         if runtime is None:
             from app.services.demo.conversations import get_script
 
-            script = get_script(session.scenario if session.mode is SessionMode.DEMO else None)
+            is_simulation = session.audio_source is AudioSource.SIMULATION
+            script = get_script(session.scenario) if session.mode is SessionMode.DEMO else None
             runtime = SessionRuntime(
                 session_id=key,
                 reference=session.reference,
                 mode=session.mode,
                 audio_source=session.audio_source,
-                script_key=script.key,
-                asr=build_asr_provider(script=script),
+                script_key=script.key if script else None,
+                # The script is only handed to the ASR provider for Demo Mode
+                # audio; real recordings must go to a real speech engine.
+                asr=build_asr_provider(
+                    script=script if is_simulation else None,
+                    audio_source=session.audio_source,
+                ),
+                diarizer=build_diarization_provider(audio_source=session.audio_source),
             )
             self._runtimes[key] = runtime
         return runtime
@@ -313,10 +342,13 @@ class SessionPipeline:
             },
         )
 
-        turns = await self._diarize(runtime, frame)
+        # ASR runs before diarization: providers that transcribe and attribute
+        # speakers in one pass (Gemini) publish their turns onto the frame for
+        # the diarization stage to consume.
         asr_segments = await self._transcribe(runtime, frame)
         if not asr_segments:
             return []
+        turns = await self._diarize(runtime, frame)
 
         return await self._assemble_and_store(runtime, frame, asr_segments, turns, chunk_id)
 
@@ -332,13 +364,31 @@ class SessionPipeline:
             return []  # speaker becomes UNKNOWN downstream
 
     async def _transcribe(self, runtime: SessionRuntime, frame: AudioFrame) -> list:
+        """Transcribe one frame.
+
+        A failure here produces no transcript at all - deliberately. Falling back
+        to any other source of text would put words a clinician never said into a
+        clinical record, so the error is surfaced instead.
+        """
         await self._emit_stage(runtime, ProcessingStage.ASR, "Transcribing audio")
         try:
             return await runtime.asr.transcribe(frame)
+        except ASRUnavailable as exc:
+            logger.error("asr_unavailable", extra={"session_id": runtime.session_id, "error": str(exc)})
+            await self._emit_error(
+                runtime, "ASR_UNAVAILABLE", str(exc), ProcessingStage.ASR, recoverable=False
+            )
+            raise
         except Exception as exc:
             logger.exception("asr_failed", extra={"session_id": runtime.session_id})
-            await self._emit_error(runtime, "ASR_FAILED", str(exc), ProcessingStage.ASR, recoverable=True)
-            return []
+            await self._emit_error(
+                runtime,
+                "ASR_FAILED",
+                f"Transcription failed, so no transcript was produced for this audio: {exc}",
+                ProcessingStage.ASR,
+                recoverable=True,
+            )
+            raise
 
     async def _assemble_and_store(
         self,
@@ -375,6 +425,24 @@ class SessionPipeline:
                 speaker = await repo.get_or_create_speaker(
                     db, session.id, label, confidence=segment.diarization_confidence
                 )
+
+                # Utterance-level conversational role check (Doctor vs Patient)
+                utt_role, utt_conf = runtime.role_attribution.score_utterance(segment.text)
+                if (label in ("speaker_0", "unknown") or speaker.role_source != "HUMAN") and utt_role is not SpeakerRole.UNKNOWN and utt_conf >= 0.65:
+                    target_label = "speaker_0" if utt_role is SpeakerRole.DOCTOR else ("speaker_1" if utt_role is SpeakerRole.PATIENT else label)
+                    if target_label != label:
+                        label = target_label
+                        segment.speaker_label = label
+                        speaker = await repo.get_or_create_speaker(
+                            db, session.id, label, confidence=utt_conf
+                        )
+                        if speaker.role_source != "HUMAN":
+                            speaker.role = utt_role
+                            speaker.confidence = utt_conf
+                            speaker_updates.append(
+                                {"id": str(speaker.id), "label": label, "role": utt_role.value, "confidence": utt_conf}
+                            )
+
                 runtime.utterances_by_speaker.setdefault(label, []).append(segment.text)
 
                 if speaker.role_source != "HUMAN":
@@ -396,6 +464,9 @@ class SessionPipeline:
                 record = TranscriptSegment(
                     session_id=session.id,
                     speaker_id=speaker.id,
+                    # Assigned as an object as well as an id so serialisation
+                    # after commit never triggers a lazy load from sync context.
+                    speaker=speaker,
                     audio_chunk_id=chunk_id,
                     ref=segment.ref,
                     sequence=runtime.segment_sequence,
@@ -605,10 +676,13 @@ class SessionPipeline:
         return True
 
     async def _call_provider(self, runtime: SessionRuntime, purpose: str, call) -> tuple[LLMProvider, Any]:
-        """Call the primary provider, degrade to the deterministic one on failure."""
+        """Gemini first; rule-based mock if Gemini is unavailable."""
         provider = runtime.llm if not runtime.ai_degraded else get_fallback_provider()
         try:
-            return provider, await call(provider)
+            result = await call(provider)
+            if not runtime.ai_degraded:
+                runtime.last_ai_error = None
+            return provider, result
         except LLMError as exc:
             runtime.last_ai_error = {"code": exc.code, "message": str(exc)[:300], "purpose": purpose}
             runtime.ai_degraded = True
@@ -620,7 +694,7 @@ class SessionPipeline:
             await self._emit_error(
                 runtime,
                 exc.code,
-                str(exc)[:300],
+                _public_llm_message(provider.name, exc),
                 ProcessingStage.LLM_STRUCTURING,
                 recoverable=not isinstance(exc, LLMAuthError),
             )
@@ -634,8 +708,19 @@ class SessionPipeline:
         except Exception as exc:
             logger.exception("llm_call_failed", extra={"session_id": runtime.session_id, "purpose": purpose})
             runtime.last_ai_error = {"code": "LLM_UNEXPECTED", "message": str(exc)[:300]}
-            await self._emit_error(runtime, "LLM_UNEXPECTED", str(exc)[:300], ProcessingStage.LLM_STRUCTURING)
-            return provider, None
+            await self._emit_error(
+                runtime,
+                "LLM_UNEXPECTED",
+                f"{provider.name} failed before a usable note could be written. A draft was filled from the transcript instead.",
+                ProcessingStage.LLM_STRUCTURING,
+            )
+            fallback = get_fallback_provider()
+            try:
+                return fallback, await call(fallback)
+            except Exception as inner:  # pragma: no cover
+                logger.exception("fallback_provider_failed", extra={"session_id": runtime.session_id})
+                runtime.last_ai_error = {"code": "FALLBACK_FAILED", "message": str(inner)[:300]}
+                return fallback, None
 
     async def _persist_entities(
         self, runtime: SessionRuntime, entities: list, *, provider_model: str

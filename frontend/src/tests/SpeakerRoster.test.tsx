@@ -19,7 +19,7 @@ describe('SpeakerRoster', () => {
     const spy = vi.spyOn(api, 'updateSpeakerRole').mockResolvedValue(updated)
     const onChanged = vi.fn()
 
-    render(<SpeakerRoster speakers={speakers} onChanged={onChanged} />)
+    render(<SpeakerRoster speakers={speakers} editable={true} onChanged={onChanged} />)
     await userEvent.selectOptions(screen.getByLabelText('Role for speaker_0'), 'NURSE')
 
     await waitFor(() => expect(spy).toHaveBeenCalledWith('sp-0', 'NURSE'))

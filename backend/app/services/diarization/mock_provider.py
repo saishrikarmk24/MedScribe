@@ -1,4 +1,4 @@
-"""Deterministic diarization for simulations.
+"""Deterministic diarization for Demo Mode.
 
 Two strategies are used, in priority order:
 

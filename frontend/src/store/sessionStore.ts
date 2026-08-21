@@ -224,11 +224,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           recoverable: boolean
           ai?: AiStatus
         }
-        const errors = [
-          { ...payload, at: event.emitted_at },
-          ...get().errors.filter((error) => error.code !== payload.code),
-        ].slice(0, 5)
-        set({ errors, ai: payload.ai ?? get().ai })
+        set({
+          errors: [{ ...payload, at: event.emitted_at }],
+          ai: payload.ai ?? get().ai,
+        })
         break
       }
       case 'SESSION_COMPLETED': {

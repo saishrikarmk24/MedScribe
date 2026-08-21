@@ -70,11 +70,11 @@ export function SessionsPage() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold tracking-tight text-navy-900">Session History</h1>
-            <p className="text-xs text-navy-500">{total} simulation session(s) recorded.</p>
+            <p className="text-xs text-navy-500">{total} session(s) recorded.</p>
           </div>
           <Link to="/sessions/new" className="btn-primary">
             <PlusCircle className="h-4 w-4" aria-hidden />
-            New Simulation
+            New Session
           </Link>
         </header>
 

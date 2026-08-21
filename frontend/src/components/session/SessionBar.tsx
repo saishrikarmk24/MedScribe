@@ -38,7 +38,13 @@ export function SessionBar({
   const isPaused = session.status === 'PAUSED'
   const canEnd = ['LIVE', 'PAUSED', 'PROCESSING'].includes(session.status)
 
-  const aiLabel = ai ? (ai.mock ? 'Rule-based fallback' : `${ai.provider} ${ai.model}`) : 'AI unknown'
+  const aiLabel = !ai
+    ? 'AI idle'
+    : ai.mock
+      ? 'Rule-based note'
+      : ai.provider === 'gemini'
+        ? `Gemini · ${ai.model}`
+        : 'AI connected'
   const aiOk = Boolean(ai && !ai.degraded && !ai.mock)
 
   return (
@@ -64,7 +70,7 @@ export function SessionBar({
       </p>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-navy-300">
-        <span className="flex items-center gap-1.5" title={`Audio source: ${session.audio_source}`}>
+        <span className="flex items-center gap-1.5" title={`Audio source: ${audioLabel}`}>
           {audioActive ? (
             <Mic className="h-3.5 w-3.5 text-teal-300" aria-hidden />
           ) : (
@@ -82,7 +88,7 @@ export function SessionBar({
           ) : (
             <WifiOff className="h-3.5 w-3.5 text-amber-300" aria-hidden />
           )}
-          {connection === 'open' ? 'WebSocket connected' : connection === 'reconnecting' ? 'Reconnecting…' : connection}
+          {connection === 'open' ? 'Connected' : connection === 'reconnecting' ? 'Reconnecting…' : connection}
         </span>
         <span className={cn('badge border-transparent bg-white/10', SESSION_STATUS_STYLES[session.status] && 'text-navy-100')}>
           <Plug className="h-3 w-3" aria-hidden />

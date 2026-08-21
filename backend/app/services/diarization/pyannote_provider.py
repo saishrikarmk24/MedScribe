@@ -44,7 +44,10 @@ class PyannoteDiarizationProvider(DiarizationService):
         if not self.token:
             raise PyannoteUnavailable("HUGGINGFACE_TOKEN is required for the pyannote pretrained pipeline.")
         logger.info("loading_diarization_model", extra={"model": self.model_name})
-        self._pipeline = Pipeline.from_pretrained(self.model_name, use_auth_token=self.token)
+        try:
+            self._pipeline = Pipeline.from_pretrained(self.model_name, token=self.token)
+        except TypeError:
+            self._pipeline = Pipeline.from_pretrained(self.model_name, use_auth_token=self.token)
         return self._pipeline
 
     async def diarize(self, audio: AudioFrame) -> list[DiarizationTurn]:  # pragma: no cover - optional dependency

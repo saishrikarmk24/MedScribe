@@ -7,6 +7,14 @@ import abc
 from app.services.types import ASRSegment, AudioFrame
 
 
+class ASRUnavailable(RuntimeError):
+    """No usable speech-to-text engine for real audio.
+
+    Raised rather than returning substitute text, so a misconfiguration surfaces
+    as a visible error instead of a fabricated transcript.
+    """
+
+
 class ASRProvider(abc.ABC):
     """Speech-to-text over a preprocessed audio frame."""
 

@@ -1,14 +1,14 @@
 # MedScribe Live
 
-**AI-powered clinical documentation for hospital simulations.**
+**AI-powered clinical documentation for doctor–patient conversations.**
 
-MedScribe Live turns a simulated doctor–patient conversation into structured, **evidence-linked** clinical documentation:
+MedScribe Live turns a doctor–patient conversation into structured, **evidence-linked** clinical documentation:
 
 ```
 Audio → Speaker-aware transcript → Clinical information → Structured note → Evidence-linked documentation
 ```
 
-It is built for hospital simulation, clinical education, faculty review and technical demonstration. **It is not a diagnostic system.** It documents what was explicitly said; it never diagnoses, recommends treatment, or approves its own output.
+It is built for clinical documentation, education, faculty review and technical demonstration. **It is not a diagnostic system.** It documents what was explicitly said; it never diagnoses, recommends treatment, or approves its own output.
 
 ---
 
@@ -24,7 +24,7 @@ If a statement cannot be linked to transcript evidence, it is flagged `REVIEW RE
 
 What you can do in the running application:
 
-- create a simulation session (demo, microphone or uploaded recording)
+- create a session (demo, microphone or uploaded recording)
 - start, pause, resume and end it
 - watch the transcript arrive progressively with speaker roles, timestamps and confidence
 - reassign speaker roles and have the note re-structured accordingly
@@ -40,7 +40,7 @@ What you can do in the running application:
                      MEDSCRIBE LIVE
                            │
                   ┌────────▼─────────┐
-                  │  AUDIO CAPTURE   │  Mic (Web Audio) / Upload / Simulation feed
+                  │  AUDIO CAPTURE   │  Mic (Web Audio) / Upload / Demo feed
                   └────────┬─────────┘
                   ┌────────▼─────────┐
                   │ AUDIO PROCESSING │  decode → mono → 16 kHz → HPF → denoise → VAD
@@ -231,9 +231,9 @@ Pass your key through the environment: `GEMINI_API_KEY=... docker compose up --b
 
 Demo Mode is the fastest way to see the whole system, and it needs no microphone and no external ASR or diarization service.
 
-1. Go to **New Simulation**.
-2. Keep audio source **Demo Simulation**.
-3. Click **Load Demo** (or **Start Simulation**).
+1. Go to **New Session**.
+2. Keep audio source **Demo**.
+3. Click **Load Demo** (or **Start Session**).
 
 What happens:
 
@@ -330,7 +330,7 @@ medscribe-live/
 │   │   │   ├── llm/          base, prompts, schemas, gemini_provider, mock_provider, validator
 │   │   │   ├── evidence/     evidence linking + provenance
 │   │   │   ├── note_engine/  note state machine, versioning, review flags
-│   │   │   ├── demo/         synthetic conversations + simulation runner
+│   │   │   ├── demo/         synthetic conversations + demo runner
 │   │   │   ├── export/       JSON, PDF, FHIR adapters
 │   │   │   ├── pipeline.py   the orchestrator
 │   │   │   └── repository.py data access + serialisation
@@ -377,7 +377,7 @@ Adapters and interfaces are already in place for:
 
 ## Safety and privacy
 
-- Simulation, education and demonstration only. Never enter real patient data.
+- Education and demonstration only. Never enter real patient data.
 - All seed and demo data is synthetic.
 - MedScribe documents what was said. It does not diagnose, recommend treatment or prescribe.
 - AI-generated documentation is never auto-approved; approval is always an explicit human action by a `DOCTOR` or `FACULTY` role and is recorded in the audit log.

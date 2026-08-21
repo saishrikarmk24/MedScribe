@@ -140,11 +140,27 @@ class SpeakerRoleAttributionService:
 
     DOCTOR_MARKERS = (
         "what brings you",
+        "what problem",
+        "what is your",
+        "what are your",
+        "what brings",
         "can you describe",
+        "describe the",
+        "any shortness",
+        "any chest",
+        "any pain",
+        "any other",
         "any ",
         "do you have",
         "are you taking",
         "are you currently",
+        "have you been",
+        "have you not",
+        "how long",
+        "how often",
+        "how are you",
+        "where does it",
+        "when did it",
         "let me examine",
         "i will",
         "we will",
@@ -154,15 +170,24 @@ class SpeakerRoleAttributionService:
         "i would like to",
         "i am going to",
         "we should",
+        "let's check",
+        "take a deep breath",
+        "prescribe",
+        "follow up",
+        "schedule",
     )
     PATIENT_MARKERS = (
         "i've been",
         "i have been",
+        "i'm having",
+        "i have a",
+        "i had",
         "i feel",
         "it feels",
         "i am taking",
         "i'm taking",
         "i take",
+        "i took",
         "my ",
         "it hurts",
         "i don't",
@@ -171,7 +196,18 @@ class SpeakerRoleAttributionService:
         "it started",
         "they started",
         "i slept",
+        "i woke up",
         "i am allergic",
+        "since last",
+        "yesterday",
+        "last night",
+        "headache",
+        "chest discomfort",
+        "stomach",
+        "i couldn't",
+        "i can't",
+        "makes me feel",
+        "it comes and goes",
     )
     NURSE_MARKERS = (
         "his temperature",
@@ -186,13 +222,33 @@ class SpeakerRoleAttributionService:
         "vitals",
     )
 
+    def score_utterance(self, text: str) -> tuple[SpeakerRole, float]:
+        clean = text.lower().strip()
+        if not clean:
+            return SpeakerRole.UNKNOWN, 0.0
+        doc_count = self._count(clean, self.DOCTOR_MARKERS) + clean.count("?") * 1.2
+        pat_count = self._count(clean, self.PATIENT_MARKERS)
+        nurse_count = self._count(clean, self.NURSE_MARKERS) * 1.4
+        scores = {
+            SpeakerRole.DOCTOR: doc_count,
+            SpeakerRole.PATIENT: pat_count,
+            SpeakerRole.NURSE: nurse_count,
+        }
+        best_role = max(scores, key=lambda role: scores[role])
+        best_score = scores[best_role]
+        if best_score <= 0:
+            return SpeakerRole.UNKNOWN, 0.0
+        total = sum(scores.values()) or 1.0
+        confidence = round(min(0.55 + 0.45 * (best_score / total), 0.98), 4)
+        return best_role, confidence
+
     def score(self, utterances: list[str]) -> tuple[SpeakerRole, float]:
         text = " ".join(utterances).lower()
         if not text.strip():
             return SpeakerRole.UNKNOWN, 0.0
 
         scores = {
-            SpeakerRole.DOCTOR: self._count(text, self.DOCTOR_MARKERS) + text.count("?") * 0.75,
+            SpeakerRole.DOCTOR: self._count(text, self.DOCTOR_MARKERS) + text.count("?") * 1.0,
             SpeakerRole.PATIENT: self._count(text, self.PATIENT_MARKERS),
             SpeakerRole.NURSE: self._count(text, self.NURSE_MARKERS) * 1.4,
         }

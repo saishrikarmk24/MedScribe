@@ -21,15 +21,15 @@ configure_logging()
 logger = get_logger(__name__)
 
 DESCRIPTION = """\
-AI-powered clinical documentation for **hospital simulations**.
+AI-powered clinical documentation workstation.
 
-MedScribe Live converts a simulated doctor-patient conversation into a
+MedScribe Live converts a doctor-patient conversation into a
 structured, evidence-linked clinical note:
 
 `audio -> diarization + ASR -> transcript -> clinical NLP -> Gemini structuring
 -> evidence linking -> note state engine -> clinical workstation`
 
-**This is a simulation and education tool, not an autonomous diagnostic system.**
+**This is a documentation assistant, not an autonomous diagnostic system.**
 Every AI-generated statement is traceable to a transcript segment, and human
 review is mandatory before a note can be approved.
 """
@@ -71,6 +71,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
+    allow_origin_regex=r"^chrome-extension://.*$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -121,7 +122,7 @@ async def root() -> dict:
     return {
         "name": settings.app_name,
         "version": settings.app_version,
-        "purpose": "Clinical documentation assistant for hospital simulation and education",
+        "purpose": "Clinical documentation assistant",
         "not_a_diagnostic_system": True,
         "docs": "/docs",
         "api": settings.api_prefix,

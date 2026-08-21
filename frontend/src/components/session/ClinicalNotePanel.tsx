@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, FileText, Link2, Pencil, ShieldAlert, Sparkles, X } from 'lucide-react'
+import { Check, FileText, Link2, Pencil, ShieldAlert, X } from 'lucide-react'
 
 import { ConfidenceMeter, EmptyState, InlineAlert, Panel } from '@/components/ui/primitives'
 import {
@@ -32,6 +32,25 @@ interface Props {
   actions?: React.ReactNode
 }
 
+const UNDOCUMENTED_PHRASES = new Set([
+  'not mentioned',
+  'not found',
+  'not stated',
+  'not discussed',
+  'none mentioned',
+  'not available',
+  'n/a',
+  'na',
+  'none',
+  'unknown',
+])
+
+function isDocumented(section: ClinicalSection | undefined) {
+  const text = (section?.text ?? '').trim()
+  if (!text) return false
+  return !UNDOCUMENTED_PHRASES.has(text.toLowerCase())
+}
+
 export function ClinicalNotePanel({
   note,
   changedSections,
@@ -50,6 +69,10 @@ export function ClinicalNotePanel({
 
   const content = note.content
   const flagged = note.review_flags ?? []
+  const visibleSections = SECTION_ORDER.filter((key) => isDocumented(content[key]))
+  const visibleGroups = (Object.keys(ENTITY_GROUP_TITLES) as EntityGroupKey[])
+    .map((groupKey) => ({ groupKey, entities: content[groupKey] ?? [] }))
+    .filter((group) => group.entities.length > 0)
 
   return (
     <Panel
@@ -65,11 +88,8 @@ export function ClinicalNotePanel({
     >
       <div className="space-y-3 p-3">
         <div className="flex flex-wrap items-center gap-2 text-2xs text-navy-500">
-          <span className="flex items-center gap-1">
-            <Sparkles className="h-3 w-3 text-teal-600" aria-hidden />
-            {note.model ?? 'pending'}
-          </span>
           <span>updated {formatRelative(note.updated_at)}</span>
+          {note.model ? <span className="mono">{note.model}</span> : null}
           {note.approved_by ? <span>approved by {note.approved_by}</span> : null}
         </div>
 
@@ -85,7 +105,7 @@ export function ClinicalNotePanel({
           </InlineAlert>
         ) : null}
 
-        {SECTION_ORDER.map((key) => (
+        {visibleSections.map((key) => (
           <NoteSection
             key={key}
             sectionKey={key}
@@ -97,14 +117,18 @@ export function ClinicalNotePanel({
           />
         ))}
 
-        {(Object.keys(ENTITY_GROUP_TITLES) as EntityGroupKey[]).map((groupKey) => (
+        {visibleGroups.map((group) => (
           <EntityGroup
-            key={groupKey}
-            title={ENTITY_GROUP_TITLES[groupKey]}
-            entities={content[groupKey] ?? []}
+            key={group.groupKey}
+            title={ENTITY_GROUP_TITLES[group.groupKey]}
+            entities={group.entities}
             onShowSource={onShowSource}
           />
         ))}
+
+        {visibleSections.length === 0 && visibleGroups.length === 0 ? (
+          <EmptyState title="Nothing documented yet" detail="Sections only appear when they were stated in the conversation." />
+        ) : null}
       </div>
     </Panel>
   )
@@ -231,14 +255,7 @@ function NoteSection({
             <p className="mt-1 text-2xs text-navy-500">{SECTION_HINTS[sectionKey]}</p>
           </>
         ) : (
-          <p
-            className={cn(
-              'whitespace-pre-wrap text-sm leading-relaxed',
-              section.text && section.text !== 'Not mentioned' ? 'text-navy-900' : 'text-navy-400',
-            )}
-          >
-            {section.text || 'Not mentioned'}
-          </p>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-navy-900">{section.text}</p>
         )}
         {needsReview && section.review_reason ? (
           <p className="mt-1.5 text-2xs text-amber-700">{section.review_reason}</p>
@@ -264,29 +281,25 @@ function EntityGroup({
         <span className="mono ml-auto text-2xs text-navy-400">{entities.length}</span>
       </header>
       <div className="px-2.5 py-2">
-        {entities.length === 0 ? (
-          <p className="text-xs text-navy-400">Not mentioned</p>
-        ) : (
-          <ul className="space-y-1">
-            {entities.map((entity) => (
-              <li key={entity.ref} className="flex flex-wrap items-center gap-1.5 text-xs">
-                <span className={cn('badge', ENTITY_STATUS_STYLES[entity.status])}>
-                  {ENTITY_STATUS_LABELS[entity.status]}
-                </span>
-                <span className="font-medium text-navy-900">{entity.value}</span>
-                {entity.detail ? <span className="text-navy-500">— {entity.detail}</span> : null}
-                <button
-                  type="button"
-                  onClick={() => onShowSource(entity.ref, entity.value)}
-                  className="ml-auto inline-flex items-center gap-1 text-2xs font-semibold text-navy-500 hover:text-teal-700"
-                >
-                  <Link2 className="h-3 w-3" aria-hidden />
-                  Source
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <ul className="space-y-1">
+          {entities.map((entity) => (
+            <li key={entity.ref} className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className={cn('badge', ENTITY_STATUS_STYLES[entity.status])}>
+                {ENTITY_STATUS_LABELS[entity.status]}
+              </span>
+              <span className="font-medium text-navy-900">{entity.value}</span>
+              {entity.detail ? <span className="text-navy-500">— {entity.detail}</span> : null}
+              <button
+                type="button"
+                onClick={() => onShowSource(entity.ref, entity.value)}
+                className="ml-auto inline-flex items-center gap-1 text-2xs font-semibold text-navy-500 hover:text-teal-700"
+              >
+                <Link2 className="h-3 w-3" aria-hidden />
+                Source
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </article>
   )

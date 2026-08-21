@@ -1,4 +1,4 @@
-"""Synthetic simulation scripts.
+"""Synthetic conversation scripts.
 
 Everything here is fabricated for training and demonstration. No real patient
 data is present, and none must ever be added.
@@ -45,7 +45,7 @@ CHEST_DISCOMFORT_SCRIPT = SimulationScript(
     key="chest_discomfort",
     title="Outpatient chest discomfort (reference scenario)",
     description=(
-        "The reference MedScribe Live simulation: intermittent chest pressure, "
+        "The reference MedScribe Live demo: intermittent chest pressure, "
         "denied shortness of breath, metformin, no known drug allergies."
     ),
     utterances=(
@@ -80,13 +80,13 @@ CHEST_DISCOMFORT_SCRIPT = SimulationScript(
 
 WARD_ROUND_SCRIPT = SimulationScript(
     key="ward_round_review",
-    title="Ward round review (simulated)",
-    description="Post-operative simulated ward round with a nurse handover and an ECG request.",
+    title="Ward round review",
+    description="Post-operative ward round with a nurse handover and an ECG request.",
     utterances=(
         ScriptedUtterance(
             "speaker_0",
             SpeakerRole.DOCTOR,
-            "Good morning. How has the night been for our simulated patient in bed four?",
+            "Good morning. How has the night been for our patient in bed four?",
             4.4,
             0.96,
             _DOCTOR_PITCH,
@@ -151,7 +151,7 @@ WARD_ROUND_SCRIPT = SimulationScript(
 
 HEADACHE_SCRIPT = SimulationScript(
     key="headache_history",
-    title="Headache history taking (simulated)",
+    title="Headache history taking",
     description="Student OSCE style history with uncertainty and a negated red flag.",
     utterances=(
         ScriptedUtterance(

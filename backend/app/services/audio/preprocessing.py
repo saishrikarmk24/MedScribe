@@ -1,8 +1,8 @@
 """Audio preprocessing: decode -> mono -> resample -> VAD -> denoise -> segment.
 
 Implemented with the standard library only (``audioop`` was removed in Python
-3.13, and pulling numpy/librosa in would make Demo Mode heavy). Buffer sizes in
-a simulation are small enough that pure Python is fast enough; the class is a
+3.13, and pulling numpy/librosa in would make Demo Mode heavy). Demo buffers are
+small enough that pure Python is fast enough; the class is a
 drop-in place to swap a vectorised implementation later.
 """
 
@@ -235,7 +235,12 @@ class AudioPreprocessingService:
                     speech_ratio=1.0,
                     rms_dbfs=-30.0,
                     decoded=False,
-                    hints={"reason": "compressed container forwarded without local decoding"},
+                    hints={
+                        "reason": "compressed container forwarded without local decoding",
+                        # Kept so a transcription provider that accepts the
+                        # container natively knows what it is holding.
+                        "container_mime_type": raw.mime_type,
+                    },
                 )
 
             mono = self.to_mono(samples, channels)

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ClipboardCheck, Mic, MicOff, Upload } from 'lucide-react'
+import { ClipboardCheck, Mic, Square, Upload } from 'lucide-react'
 
 import { ClinicalNotePanel } from '@/components/session/ClinicalNotePanel'
 import { EvidenceViewer } from '@/components/session/EvidenceViewer'
@@ -9,11 +9,12 @@ import { SessionBar } from '@/components/session/SessionBar'
 import { SpeakerRoster } from '@/components/session/SpeakerRoster'
 import { TranscriptPanel } from '@/components/session/TranscriptPanel'
 import { InlineAlert, Spinner } from '@/components/ui/primitives'
-import { useMicrophoneCapture } from '@/hooks/useMicrophoneCapture'
+import { useAudioRecorder } from '@/hooks/useAudioRecorder'
 import { api } from '@/services/api'
 import { useSessionStore } from '@/store/sessionStore'
 import { useUiStore } from '@/store/uiStore'
 import { cn } from '@/utils/cn'
+import { formatDuration } from '@/utils/format'
 
 export function LiveSessionPage() {
   const { id } = useParams<{ id: string }>()
@@ -52,7 +53,7 @@ export function LiveSessionPage() {
   const [elapsed, setElapsed] = useState(0)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  const microphone = useMicrophoneCapture(id ?? null, session?.mode === 'MICROPHONE')
+  const recorder = useAudioRecorder(id ?? null)
 
   useEffect(() => {
     if (!id) return
@@ -134,12 +135,14 @@ export function LiveSessionPage() {
 
   const audioLabel =
     session.mode === 'DEMO'
-      ? 'Simulation feed'
+      ? 'Demo feed'
       : session.mode === 'UPLOAD'
         ? 'Uploaded recording'
-        : microphone.active
-          ? 'Microphone connected'
-          : 'Microphone idle'
+        : recorder.recording
+          ? `Recording ${formatDuration(recorder.seconds)}`
+          : recorder.state === 'uploading'
+            ? 'Transcribing recording'
+            : 'Microphone idle'
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -148,14 +151,14 @@ export function LiveSessionPage() {
         elapsed={elapsed}
         connection={connection}
         ai={ai}
-        audioActive={audioActive || microphone.active}
+        audioActive={audioActive || recorder.recording}
         audioLabel={audioLabel}
         busy={busy}
         onPause={() => void action('Pause failed', () => api.pauseSession(session.id))}
         onResume={() => void action('Resume failed', () => api.resumeSession(session.id))}
         onStop={() =>
           void action('End session failed', async () => {
-            microphone.stop()
+            recorder.cancel()
             const stopped = await api.stopSession(session.id)
             navigate(`/sessions/${session.id}/review`)
             return stopped
@@ -190,24 +193,50 @@ export function LiveSessionPage() {
           <>
             <button
               type="button"
-              className={cn(microphone.active ? 'btn-danger' : 'btn-teal')}
-              onClick={() => (microphone.active ? microphone.stop() : void microphone.start())}
-              disabled={session.status !== 'LIVE'}
+              className={cn(recorder.recording ? 'btn-danger' : 'btn-teal')}
+              onClick={() => (recorder.recording ? void recorder.stop() : void recorder.start())}
+              disabled={session.status !== 'LIVE' || recorder.busy}
+              aria-label={recorder.recording ? 'Stop recording and transcribe' : 'Record microphone'}
             >
-              {microphone.active ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
-              {microphone.active ? 'Stop microphone' : 'Enable microphone'}
+              {recorder.state === 'uploading' ? (
+                <Spinner />
+              ) : recorder.recording ? (
+                <Square className="h-4 w-4" aria-hidden />
+              ) : (
+                <Mic className="h-4 w-4" aria-hidden />
+              )}
+              {recorder.state === 'requesting'
+                ? 'Requesting microphone…'
+                : recorder.state === 'uploading'
+                  ? 'Transcribing…'
+                  : recorder.recording
+                    ? `Stop & transcribe · ${formatDuration(recorder.seconds)}`
+                    : 'Record'}
             </button>
-            {microphone.active ? (
-              <span className="flex items-center gap-1.5 text-2xs text-navy-500">
-                Input level
-                <span className="relative h-1.5 w-24 overflow-hidden rounded-full bg-navy-100">
-                  <span
-                    className="absolute inset-y-0 left-0 rounded-full bg-teal-500 transition-[width] duration-100"
-                    style={{ width: `${Math.min(100, Math.round(microphone.level * 160))}%` }}
-                  />
+
+            {recorder.recording ? (
+              <>
+                <span className="flex items-center gap-1.5 text-2xs text-navy-500">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" aria-hidden />
+                  Input level
+                  <span className="relative h-1.5 w-24 overflow-hidden rounded-full bg-navy-100">
+                    <span
+                      className="absolute inset-y-0 left-0 rounded-full bg-teal-500 transition-[width] duration-100"
+                      style={{ width: `${Math.min(100, Math.round(recorder.level * 160))}%` }}
+                    />
+                  </span>
                 </span>
+                <button type="button" className="btn-secondary" onClick={recorder.cancel}>
+                  Discard
+                </button>
+              </>
+            ) : (
+              <span className="text-2xs text-navy-500">
+                {session.status === 'LIVE'
+                  ? 'Your speech is transcribed after you press Stop.'
+                  : 'Start the session to record.'}
               </span>
-            ) : null}
+            )}
           </>
         ) : null}
 
@@ -251,8 +280,13 @@ export function LiveSessionPage() {
         </Link>
       </div>
 
-      {errors.length > 0 ? (
+      {recorder.error || errors.length > 0 ? (
         <div className="space-y-1.5 border-b border-navy-200 bg-navy-50/70 px-4 py-2">
+          {recorder.error ? (
+            <InlineAlert kind="error" title="Recording could not be processed" onDismiss={recorder.clearError}>
+              {recorder.error}
+            </InlineAlert>
+          ) : null}
           {errors.map((error) => (
             <InlineAlert
               key={error.code}

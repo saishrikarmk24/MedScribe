@@ -92,9 +92,9 @@ async def list_sessions(
     return Page[SessionSummary](items=items, total=total, limit=limit, offset=offset)
 
 
-@router.get("/scripts", tags=["simulation"])
+@router.get("/scripts", tags=["demo"])
 async def available_scripts() -> dict:
-    """Synthetic simulation scripts available for Demo Mode."""
+    """Synthetic conversation scripts available for Demo Mode."""
     return {"scripts": list_scripts(), "demo_mode_enabled": settings.enable_demo_mode}
 
 
@@ -209,7 +209,7 @@ async def start_session(session: SessionDep, db: DbSession, principal: CurrentPr
     if session.status in (SessionStatus.APPROVED, SessionStatus.COMPLETED):
         raise HTTPException(status_code=409, detail="An approved or completed session cannot be restarted.")
     if not principal.can_manage_sessions():
-        raise HTTPException(status_code=403, detail="This role cannot start simulations.")
+        raise HTTPException(status_code=403, detail="This role cannot start sessions.")
 
     await repo.record_audit(
         db,
