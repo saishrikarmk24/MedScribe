@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ClipboardCheck, FileClock, Radio, ScrollText, Waves } from 'lucide-react'
 
 import { SpeakerRoster } from '@/components/session/SpeakerRoster'
-import { ConfidenceMeter, InlineAlert, Panel, Spinner, StatCard } from '@/components/ui/primitives'
+import { InlineAlert, Panel, Spinner, StatCard } from '@/components/ui/primitives'
 import { ENTITY_STATUS_LABELS, ENTITY_STATUS_STYLES, NOTE_STATUS_LABELS, ROLE_STYLES, SESSION_STATUS_STYLES } from '@/constants'
 import { api } from '@/services/api'
 import type { AudioChunk, ClinicalEntity, ClinicalNote, Session, TranscriptSegment } from '@/types'
@@ -82,59 +82,58 @@ export function SessionDetailPage() {
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="mono text-lg font-semibold tracking-tight text-navy-900">{session.reference}</h1>
+              <h1 className="mono text-lg font-semibold tracking-tight text-slate-900">{session.reference}</h1>
               <span className={cn('badge', SESSION_STATUS_STYLES[session.status])}>{session.status}</span>
             </div>
-            <p className="text-xs text-navy-500">
-              {session.name} · patient {session.patient_id} · created {formatDateTime(session.created_at)}
+            <p className="text-xs text-slate-500">
+              {session.name} · Patient {session.patient_id} · Created {formatDateTime(session.created_at)}
             </p>
           </div>
-          <div className="flex gap-1.5">
-            <Link to={`/sessions/${session.id}/live`} className="btn-secondary">
+          <div className="flex gap-2">
+            <Link to={`/sessions/${session.id}/live`} className="btn-secondary !py-1 text-xs">
               <Radio className="h-4 w-4" aria-hidden />
-              Live view
+              Live Workspace
             </Link>
-            <Link to={`/sessions/${session.id}/review`} className="btn-primary">
+            <Link to={`/sessions/${session.id}/review`} className="btn-teal !py-1 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
               <ClipboardCheck className="h-4 w-4" aria-hidden />
-              Review & Approve
+              Review & Approve Note
             </Link>
           </div>
         </header>
 
         {session.last_error ? (
-          <InlineAlert kind="warning" title="Last recorded pipeline error">
+          <InlineAlert kind="warning" title="Last Recorded Note Warning">
             {session.last_error}
           </InlineAlert>
         ) : null}
 
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatCard label="Duration" value={formatDuration(session.duration_seconds)} />
-          <StatCard label="Segments" value={segments.length} />
-          <StatCard label="Entities" value={entities.length} />
+          <StatCard label="Speech Lines" value={segments.length} />
+          <StatCard label="Clinical Facts" value={entities.length} />
           <StatCard
-            label="Note"
+            label="Note Status"
             value={note ? NOTE_STATUS_LABELS[note.status] : '—'}
-            detail={note ? `version ${note.version}` : undefined}
+            detail={note ? `Version ${note.version}` : undefined}
           />
-          <StatCard label="Speech captured" value={formatDuration(speechSeconds)} detail={`${chunks.length} chunks`} />
+          <StatCard label="Speech Audio" value={formatDuration(speechSeconds)} detail={`${chunks.length} recording files`} />
         </div>
 
         <div className="grid gap-3 lg:grid-cols-2">
-          <Panel title="Transcript" icon={<ScrollText className="h-3.5 w-3.5" aria-hidden />} className="max-h-96">
+          <Panel title="Conversation Transcript" icon={<ScrollText className="h-3.5 w-3.5 text-teal-600" aria-hidden />} className="max-h-96">
             {segments.length === 0 ? (
-              <p className="p-3 text-xs text-navy-500">No transcript recorded.</p>
+              <p className="p-3 text-xs text-slate-500">No transcript recorded.</p>
             ) : (
-              <ol className="divide-y divide-navy-50">
+              <ol className="divide-y divide-slate-100">
                 {segments.map((segment) => {
                   const role = ROLE_STYLES[segment.role] ?? ROLE_STYLES.UNKNOWN
                   return (
                     <li key={segment.ref} className={cn('border-l-2 px-3 py-2', role.accent)}>
                       <div className="flex items-center gap-2">
                         <span className={cn('badge', role.badge)}>{role.label}</span>
-                        <span className="mono text-2xs text-navy-500">{formatTimestamp(segment.start_time)}</span>
-                        <ConfidenceMeter value={segment.confidence} className="ml-auto" />
+                        <span className="mono text-2xs text-slate-500">{formatTimestamp(segment.start_time)}</span>
                       </div>
-                      <p className="mt-0.5 text-xs leading-relaxed text-navy-800">{segment.text}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-slate-800">{segment.text}</p>
                     </li>
                   )
                 })}
@@ -145,18 +144,18 @@ export function SessionDetailPage() {
           <div className="flex flex-col gap-3">
             <SpeakerRoster speakers={session.speakers} editable={false} />
 
-            <Panel title="Clinical information" className="max-h-64">
+            <Panel title="Key Clinical Findings" className="max-h-64">
               {entities.length === 0 ? (
-                <p className="p-3 text-xs text-navy-500">No clinical information extracted.</p>
+                <p className="p-3 text-xs text-slate-500">No clinical findings extracted yet.</p>
               ) : (
-                <ul className="divide-y divide-navy-50">
+                <ul className="divide-y divide-slate-100">
                   {entities.map((entity) => (
                     <li key={entity.ref} className="flex items-center gap-1.5 px-3 py-1.5 text-xs">
                       <span className={cn('badge', ENTITY_STATUS_STYLES[entity.status])}>
                         {ENTITY_STATUS_LABELS[entity.status]}
                       </span>
-                      <span className="font-medium text-navy-900">{entity.value}</span>
-                      <span className="ml-auto text-2xs text-navy-500">{titleCase(entity.entity_type)}</span>
+                      <span className="font-medium text-slate-900">{entity.value}</span>
+                      <span className="ml-auto text-2xs text-slate-500">{titleCase(entity.entity_type)}</span>
                     </li>
                   ))}
                 </ul>

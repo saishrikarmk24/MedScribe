@@ -9,8 +9,12 @@ provider would satisfy, so swapping it does not touch the routes.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
+import json
+import os
+import time
 from dataclasses import dataclass
 from typing import Annotated, Iterable
 
@@ -20,11 +24,69 @@ from app.core.config import settings
 from app.models.enums import UserRole
 
 
+def hash_password(password: str) -> str:
+    """Hash a password using PBKDF2-HMAC-SHA256 with a cryptographically secure random salt."""
+    salt = os.urandom(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+    return f"{salt.hex()}${key.hex()}"
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    """Verify a password against a stored PBKDF2-HMAC-SHA256 hash."""
+    try:
+        salt_hex, key_hex = hashed.split("$")
+        salt = bytes.fromhex(salt_hex)
+        expected_key = bytes.fromhex(key_hex)
+        key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100_000)
+        return hmac.compare_digest(key, expected_key)
+    except Exception:
+        return False
+
+
+def create_access_token(data: dict, expires_delta_seconds: int = 86400 * 7) -> str:
+    """Create an HMAC-SHA256 signed access token."""
+    payload = dict(data)
+    payload["exp"] = int(time.time()) + expires_delta_seconds
+    raw_payload = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    b64_payload = base64.urlsafe_b64encode(raw_payload).decode("utf-8").rstrip("=")
+    sig = hmac.new(settings.secret_key.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{b64_payload}.{sig}"
+
+
+def decode_access_token(token: str) -> dict | None:
+    """Verify signature and return the token payload, or None if invalid/expired."""
+    try:
+        parts = token.split(".")
+        if len(parts) != 2:
+            return None
+        b64_payload, signature = parts
+        expected_sig = hmac.new(
+            settings.secret_key.encode("utf-8"), b64_payload.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+
+        # Pad base64 urlsafe string
+        padding = "=" * ((4 - len(b64_payload) % 4) % 4)
+        raw_json = base64.urlsafe_b64decode(b64_payload + padding).decode("utf-8")
+        payload = json.loads(raw_json)
+
+        exp = payload.get("exp")
+        if exp is not None and time.time() > float(exp):
+            return None  # expired
+        return payload
+    except Exception:
+        return None
+
+
 @dataclass(slots=True)
 class Principal:
     email: str
     role: UserRole
     display_name: str
+    doctor_id: str | None = None
+    user_id: str | None = None
+    department: str | None = None
     development: bool = True
 
     @property
@@ -48,18 +110,42 @@ def _parse_role(raw: str | None) -> UserRole:
 
 
 async def get_current_principal(
+    authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     x_user_email: Annotated[str | None, Header(alias="X-User-Email")] = None,
     x_user_role: Annotated[str | None, Header(alias="X-User-Role")] = None,
 ) -> Principal:
-    if not settings.dev_auth_enabled:  # pragma: no cover - production path
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication provider is not configured.",
-        )
-    email = (x_user_email or settings.dev_user_email).strip().lower()
-    role = _parse_role(x_user_role)
-    display = email.split("@")[0].replace(".", " ").title()
-    return Principal(email=email, role=role, display_name=display, development=True)
+    # 1. Try Bearer token from Authorization header
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+        payload = decode_access_token(token)
+        if payload:
+            email = str(payload.get("email", "")).strip().lower()
+            role = _parse_role(payload.get("role"))
+            display = payload.get("full_name") or email.split("@")[0].replace(".", " ").title()
+            doctor_id = payload.get("doctor_id")
+            user_id = payload.get("user_id")
+            department = payload.get("department")
+            return Principal(
+                email=email,
+                role=role,
+                display_name=display,
+                doctor_id=doctor_id,
+                user_id=user_id,
+                department=department,
+                development=False,
+            )
+
+    # 2. Try development header fallback
+    if settings.dev_auth_enabled:
+        email = (x_user_email or settings.dev_user_email).strip().lower()
+        role = _parse_role(x_user_role)
+        display = email.split("@")[0].replace(".", " ").title()
+        return Principal(email=email, role=role, display_name=display, development=True)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or missing authentication credentials.",
+    )
 
 
 CurrentPrincipal = Annotated[Principal, Depends(get_current_principal)]

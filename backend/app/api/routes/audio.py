@@ -116,3 +116,41 @@ async def _ingest(runtime, raw: RawAudio):
         raise HTTPException(
             status_code=502, detail=f"Audio could not be transcribed: {exc}"
         ) from exc
+
+
+@router.post("/transcribe_clip", response_model=Acknowledgement)
+async def transcribe_clip(file: UploadFile = File(...)) -> Acknowledgement:
+    """Transcribe a standalone voice dictation clip directly using the active ASR provider."""
+    data = await file.read()
+    if not data:
+        return Acknowledgement(ok=False, message="Audio clip was empty.", detail={"text": ""})
+    try:
+        from app.models.enums import AudioSource
+        from app.services.asr import build_asr_provider
+        from app.services.audio import AudioPreprocessingService, UploadedAudioProvider
+
+        provider = UploadedAudioProvider(data=data, mime_type=file.content_type or "audio/wav")
+        raw = await provider.next_chunk()
+        if raw is None:
+            return Acknowledgement(ok=False, message="Could not decode audio.", detail={"text": ""})
+
+        preprocessor = AudioPreprocessingService()
+        frame = preprocessor.process(
+            raw,
+            session_id="clip",
+            sequence=1,
+            start_time=0.0,
+            source=AudioSource.MICROPHONE,
+        )
+        asr = build_asr_provider()
+        segments = await asr.transcribe(frame)
+        text = " ".join(s.text.strip() for s in segments if s.text.strip())
+        return Acknowledgement(
+            ok=bool(text),
+            message="Transcription complete" if text else "No speech recognised in audio clip.",
+            detail={"text": text},
+        )
+    except Exception as exc:
+        logger.exception("clip_transcription_failed")
+        return Acknowledgement(ok=False, message=str(exc), detail={"text": ""})
+

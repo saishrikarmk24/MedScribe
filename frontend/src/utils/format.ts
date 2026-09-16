@@ -44,7 +44,8 @@ export function formatRelative(value: string | null | undefined): string {
   if (diffSeconds < 60) return 'just now'
   if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`
   if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`
-  return `${Math.floor(diffSeconds / 86400)}d ago`
+  const days = Math.floor(diffSeconds / 86400)
+  return days === 1 ? '1 day ago' : `${days} days ago`
 }
 
 export function formatLatency(ms: number | null | undefined): string {
@@ -70,4 +71,39 @@ export function initials(value: string | null | undefined): string {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('')
+}
+
+export function formatSpeakerDisplayName(
+  speakerLabel?: string | null,
+  role?: string | null,
+  customDisplayName?: string | null,
+): { title: string; subtitle?: string; fullBadge: string } {
+  if (customDisplayName) {
+    const roleText = role && role !== 'UNKNOWN' ? titleCase(role) : ''
+    return {
+      title: customDisplayName,
+      subtitle: roleText,
+      fullBadge: roleText ? `${customDisplayName} (${roleText})` : customDisplayName,
+    }
+  }
+
+  let speakerNum = ''
+  if (speakerLabel) {
+    const match = speakerLabel.match(/(?:speaker[_\s-]*)?(\d+)/i)
+    if (match) {
+      const idx = parseInt(match[1], 10)
+      speakerNum = `Speaker ${idx + 1}`
+    } else {
+      speakerNum = titleCase(speakerLabel)
+    }
+  } else {
+    speakerNum = 'Speaker'
+  }
+
+  const roleText = role && role !== 'UNKNOWN' ? titleCase(role) : ''
+  return {
+    title: speakerNum,
+    subtitle: roleText,
+    fullBadge: roleText ? `${speakerNum} (${roleText})` : speakerNum,
+  }
 }

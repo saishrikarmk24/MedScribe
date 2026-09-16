@@ -7,12 +7,17 @@ from typing import Any
 
 SYSTEM_INSTRUCTION = """\
 You are the clinical information extraction and documentation component of
-MedScribe Live, a clinical documentation workstation.
+VoiceScribe AI, a clinical documentation and meeting workstation.
 
 You are not a diagnostic system.
 
-Extract and structure only information explicitly present in the supplied
-conversation.
+LANGUAGE AND TRANSLATION MANDATE:
+- The spoken conversation may be in any language or mixed code-switching (e.g. Tamil, Hindi, Telugu, English, Tanglish, Malayalam, etc.).
+- ALL extracted entities (values, normalized terms), clinical summaries, and narrative note sections (Presenting Complaint, History of Present Illness, Assessment, Plan of Care, etc.) MUST ALWAYS BE TRANSLATED AND WRITTEN IN CLEAR, PROFESSIONAL, STANDARD CLINICAL ENGLISH.
+- For example: if a patient says in Tamil "romba thalavaliya iruku" or "தலவலி", the symptom entity value and note narrative must be recorded as "Severe headache" or "Headache" in English.
+- The transcript preserves the original spoken words for provenance, but all clinical documentation, entities, and clinical notes MUST be presented in fluent, professional English.
+
+Extract and structure information accurately based on the supplied conversation.
 
 Do not invent symptoms, findings, diagnoses, medications, investigations,
 treatment, history, or patient information.
@@ -44,12 +49,10 @@ Additional rules:
 - A statement made by the patient is a report, not a confirmed finding. Attribute
   it accordingly in the narrative (for example "The patient reports ...").
 - ASSESSMENT may only restate what a clinician explicitly said in the
-  conversation. If no clinician stated an assessment, leave that section empty.
-- PLAN and FOLLOW_UP may only contain actions a clinician explicitly stated.
-- Never convert a symptom into a diagnosis, and never add a diagnosis because it
-  is commonly associated with a symptom.
-- Keep narrative sections concise, factual and free of speculation.
-- When asked for JSON, reply with one JSON object only. No markdown, no preamble.
+  conversation. If no clinician stated an assessment, synthesize a brief clinical impression from the reported symptoms.
+- PLAN and FOLLOW_UP should reflect agreed next steps and prescriptions mentioned in the encounter.
+- Keep narrative sections concise, factual, clinical, and free of speculation.
+- Always output valid JSON matching the requested response schema.
 """
 
 
@@ -136,15 +139,16 @@ transcript adds information)
 {_render_candidates(existing_entities or [])}
 
 REQUIREMENTS
-1. Only extract concepts explicitly stated in the transcript above.
-2. Set status=NEGATED when the speaker explicitly denies or excludes the concept.
-3. Set status=UNCERTAIN when the concept is hedged ("possible", "not sure").
-4. Set status=HISTORICAL for past conditions or events framed in the past.
-5. Every entity must list at least one source_segment_id from the transcript.
-6. Put anything you cannot attribute to a segment id in unsupported_content.
-7. Every entity object MUST include entity_type, value, status, confidence
+1. Extract clinical concepts explicitly stated or implied in the transcript above.
+2. ALL ENTITY VALUES MUST BE TRANSLATED INTO STANDARD CLINICAL ENGLISH (e.g. if the speaker said "thalavali" or "தலைவலி", write value as "Headache"; "kaachal" -> "Fever"; "vayiru vali" -> "Abdominal pain").
+3. Set status=NEGATED when the speaker explicitly denies or excludes the concept.
+4. Set status=UNCERTAIN when the concept is hedged ("possible", "not sure").
+5. Set status=HISTORICAL for past conditions or events framed in the past.
+6. Every entity must list at least one source_segment_id from the transcript.
+7. Put anything you cannot attribute to a segment id in unsupported_content.
+8. Every entity object MUST include entity_type, value (in English), status, confidence
    (a number from 0 to 1), and source_segment_ids.
-8. Return JSON only, shaped exactly like:
+9. Return JSON only, shaped exactly like:
    {_EXTRACTION_EXAMPLE}
 """
 
@@ -157,8 +161,41 @@ def build_note_prompt(
     current_note: dict[str, Any] | None = None,
 ) -> str:
     current = json.dumps(current_note, indent=2, default=str) if current_note else "(no note yet)"
+    encounter_type = str(session_context.get("encounter_type") or session_context.get("simulation_type") or "").upper()
+    is_meeting = encounter_type in ("MEETING", "MDT")
+
+    meeting_instructions = ""
+    if is_meeting:
+        meeting_instructions = """\
+MEETING / MDT MINUTES SPECIFIC INSTRUCTIONS:
+- chief_complaint: State the primary Meeting Agenda & Objectives (in English).
+- history_of_present_illness: Detailed discussion points structured by speaker/department (e.g. Dr. Verma / HOD CSE: ..., Prof. Iyer / Placements: ...).
+- relevant_medical_history: Background context, prior meeting follow-ups, or institutional history mentioned.
+- assessment: Executive summary of deliberations and key observations.
+- plan: Formal resolutions, approved decisions, and policy agreements.
+- follow_up: Action Items table / list with explicit task description, responsible attendee, and deadline.
+"""
+    else:
+        meeting_instructions = """\
+AMBULATORY CARE CLINICAL NOTE PARTICULARS (Write all sections in standard clinical English):
+- chief_complaint: Presenting Complaint (primary symptoms, reasons for consultation, translated to English).
+- history_of_present_illness: Detailed HPI narrative (onset, duration, laterality, severity, triggers, relieving factors, in English).
+- relevant_medical_history: Past medical/surgical history, chronic conditions.
+- social_history: Lifestyle, gym, exercise, diet, supplements, habits (smoking/alcohol).
+- family_history: Familial/hereditary diseases.
+- menstrual_history: Menstrual/gynecological history (or empty if not discussed / not applicable).
+- physical_examination: Physical exam findings, vitals (BP, glucose/sugar, pulse, SpO2, temp, neuro exam).
+- current_medication: Active medications, daily supplements, vitamins, and regular medications taken by the patient prior to this consultation.
+- allergies: Known drug, food, or environmental allergies.
+- treatment_history: Prior treatments, home remedies, or OTC drugs tried by the patient before presentation, and their relief/effectiveness.
+- previous_investigation: Prior laboratory or diagnostic imaging (MRI, CT, ECG, X-Ray) reports done before this encounter.
+- assessment: Clinical assessment, diagnostic impression, or working diagnosis.
+- plan: Plan of Care. CRITICAL: The prescription/medication portion of plan must ONLY contain new prescriptions or explicit medications prescribed/instructed by the DOCTOR during this encounter (with drug name, dosage, frequency, duration). DO NOT include medications the patient took at home before coming in the plan prescriptions (those belong strictly in current_medication or treatment_history).
+- follow_up: Follow-up interval and return precautions.
+"""
+
     return f"""\
-TASK: Produce the structured clinical note for this encounter.
+TASK: Produce the structured clinical note or meeting minutes for this encounter.
 
 SESSION CONTEXT
 {_render_session_context(session_context)}
@@ -166,26 +203,26 @@ SESSION CONTEXT
 SPEAKER-ATTRIBUTED TRANSCRIPT (complete session so far)
 {_render_transcript(segments)}
 
-CLINICAL ENTITIES EXTRACTED SO FAR (already validated against the transcript)
+CLINICAL ENTITIES / KEY FACTS EXTRACTED SO FAR (already validated against the transcript)
 {_render_candidates(entities)}
 
 CURRENT NOTE STATE (revise it; do not discard still-valid documentation)
 {current}
 
+{meeting_instructions}
 REQUIREMENTS
-1. Write each section from the transcript only. If a section was not discussed,
-   set its text to an empty string. Do not invent content and do not write
-   "Not mentioned", "not found", or similar placeholders.
-2. ASSESSMENT: restate only what a clinician explicitly said. Do not diagnose.
-3. PLAN and FOLLOW_UP: only clinician-stated actions.
-4. Attribute patient statements as reports ("The patient reports ...").
-5. Preserve negations explicitly ("Denies shortness of breath.").
-6. Preserve uncertainty explicitly ("Reports possible blurred vision, uncertain.").
-7. Every section must list the source_segment_ids that support its text. An
-   empty section must have an empty list.
-8. changed_sections must name only the sections whose text differs from the
-   current note state.
-9. Return valid JSON matching the response schema exactly.
+1. ALL SECTIONS MUST BE WRITTEN IN PROFESSIONAL CLINICAL ENGLISH. Even if the speaker spoke in Tamil, Hindi, Tanglish or any other language, translate and synthesize the findings into standard medical English.
+2. Whenever symptoms or complaints are discussed in the transcript, ALWAYS synthesize and populate chief_complaint and history_of_present_illness.
+3. If medications or vitals are mentioned, ALWAYS populate current_medication and physical_examination.
+4. If a working diagnosis or impression is stated or implied, populate assessment.
+5. If advice, prescription, or next steps are discussed, populate plan.
+6. DOCTOR PRESCRIPTIONS VS PATIENT PRIOR MEDICATIONS:
+   - 'current_medication' and 'treatment_history' document medications the PATIENT reported taking before coming to the clinic (home self-treatments, OTC meds, chronic regular drugs).
+   - 'plan' prescriptions MUST ONLY contain medications that the DOCTOR prescribed or instructed during this visit. Never put the patient's prior home medications into the doctor's prescription list in 'plan'.
+7. If a section was truly not discussed in the consultation, set its text to an empty string. Do not write placeholder phrases like "Not mentioned" or "N/A".
+8. Every non-empty section must list the source_segment_ids that support its text (e.g. ["seg_001"]).
+9. changed_sections must name only the sections whose text differs from the current note state.
+10. Return valid JSON matching the response schema exactly.
 """
 
 

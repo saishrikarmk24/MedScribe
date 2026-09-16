@@ -6,9 +6,12 @@
 import { API_BASE } from '@/constants'
 import type {
   AudioChunk,
+  AuthResponse,
+  AuthUser,
   ClinicalEntity,
   ClinicalNote,
   DashboardStats,
+  DoctorCreatePayload,
   EvidenceLink,
   ExportFormat,
   NoteSectionKey,
@@ -35,8 +38,10 @@ export class ApiError extends Error {
 }
 
 export interface Identity {
+  token?: string
   email?: string
   role?: string
+  doctor_id?: string
 }
 
 let identity: Identity = {}
@@ -47,8 +52,11 @@ export function setIdentity(next: Identity): void {
 
 function headers(extra?: HeadersInit): HeadersInit {
   const base: Record<string, string> = { 'Content-Type': 'application/json' }
+  const token = identity.token || (typeof localStorage !== 'undefined' ? localStorage.getItem('medscribe_auth_token') : null)
+  if (token) base['Authorization'] = `Bearer ${token}`
   if (identity.email) base['X-User-Email'] = identity.email
   if (identity.role) base['X-User-Role'] = identity.role
+  if (identity.doctor_id) base['X-Doctor-Id'] = identity.doctor_id
   return { ...base, ...(extra as Record<string, string> | undefined) }
 }
 
@@ -177,6 +185,23 @@ export const api = {
     }
     return (await response.json()) as { ok: boolean; message: string | null; detail: Record<string, unknown> }
   },
+  transcribeClip: async (file: File | Blob) => {
+    const form = new FormData()
+    form.append('file', file, 'vitals_dictation.wav')
+    const authHeaders: Record<string, string> = {}
+    if (identity.email) authHeaders['X-User-Email'] = identity.email
+    if (identity.role) authHeaders['X-User-Role'] = identity.role
+    const response = await fetch(`${API_BASE}/sessions/transcribe_clip`, {
+      method: 'POST',
+      body: form,
+      headers: authHeaders,
+    })
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ detail: response.statusText }))
+      throw new ApiError(response.status, String(body.detail ?? 'Clip transcription failed'))
+    }
+    return (await response.json()) as { ok: boolean; message: string | null; detail?: { text?: string } }
+  },
 
   // ---- export -------------------------------------------------------------
   exportSession: async (sessionId: string, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
@@ -196,6 +221,35 @@ export const api = {
     request<{ json_export: Record<string, unknown>; fhir_bundle: Record<string, unknown>; fhir_resource_counts: Record<string, number> }>(
       `/sessions/${sessionId}/export/preview`,
     ),
+
+  // ---- auth & doctor provisioning ----------------------------------------
+  login: (identifier: string, password: string) =>
+    request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password }),
+    }),
+  adminRegister: (data: { email: string; full_name: string; password: string }) =>
+    request<AuthResponse>('/auth/admin/register', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getMe: () => request<AuthUser>('/auth/me'),
+  listDoctors: () => request<AuthUser[]>('/auth/doctors'),
+  createDoctor: (data: DoctorCreatePayload) =>
+    request<AuthUser>('/auth/doctors', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateDoctorStatus: (doctorUuid: string, isActive: boolean) =>
+    request<AuthUser>(`/auth/doctors/${doctorUuid}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ is_active: isActive }),
+    }),
+  resetDoctorPassword: (doctorUuid: string, newPassword: string) =>
+    request<{ ok: boolean; message: string | null }>(`/auth/doctors/${doctorUuid}/reset_password`, {
+      method: 'POST',
+      body: JSON.stringify({ new_password: newPassword }),
+    }),
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {

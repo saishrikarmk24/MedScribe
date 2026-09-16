@@ -1,4 +1,4 @@
-"""MedScribe Live - FastAPI application entrypoint."""
+"""VoiceScribe AI - FastAPI application entrypoint."""
 
 from __future__ import annotations
 
@@ -21,10 +21,10 @@ configure_logging()
 logger = get_logger(__name__)
 
 DESCRIPTION = """\
-AI-powered clinical documentation workstation.
+AI-powered clinical documentation and meeting minutes workstation.
 
-MedScribe Live converts a doctor-patient conversation into a
-structured, evidence-linked clinical note:
+VoiceScribe AI converts a doctor-patient conversation or multi-speaker meeting into a
+structured, evidence-linked clinical note or meeting minutes:
 
 `audio -> diarization + ASR -> transcript -> clinical NLP -> Gemini structuring
 -> evidence linking -> note state engine -> clinical workstation`

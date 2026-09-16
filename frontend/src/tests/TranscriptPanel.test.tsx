@@ -7,7 +7,7 @@ import { TranscriptPanel } from '@/components/session/TranscriptPanel'
 import { evidence, segments, speakers } from './fixtures'
 
 describe('TranscriptPanel', () => {
-  it('renders speaker role, timestamp, confidence and text for every segment', () => {
+  it('renders speaker role, timestamp, and text for every segment', () => {
     render(
       <TranscriptPanel
         segments={segments}
@@ -22,10 +22,9 @@ describe('TranscriptPanel', () => {
 
     expect(screen.getByText('Good morning. What brings you in today?')).toBeInTheDocument()
     expect(screen.getByText("I've been having chest discomfort since yesterday evening.")).toBeInTheDocument()
-    expect(screen.getAllByText('Doctor')).toHaveLength(1)
-    expect(screen.getAllByText('Patient')).toHaveLength(2)
+    expect(screen.getAllByText('Speaker 1 (Doctor)')).toHaveLength(1)
+    expect(screen.getAllByText('Speaker 2 (Patient)')).toHaveLength(2)
     expect(screen.getByText('00:00:00')).toBeInTheDocument()
-    expect(screen.getByText('96%')).toBeInTheDocument()
     expect(screen.getByText('Live')).toBeInTheDocument()
   })
 

@@ -17,6 +17,7 @@ from typing import Any
 from app.core.logging import get_logger
 from app.models.enums import NoteStatus
 from app.schemas.clinical import (
+    ENTITY_KEYS,
     SECTION_KEYS,
     SECTION_LABELS,
     ClinicalEntityOut,
@@ -144,9 +145,9 @@ class NoteStateEngine:
                 setattr(content, key, new_section)
                 changed.append(key)
 
-        for group_key, items in entities.items():
-            if getattr(content, group_key, None) is not None:
-                setattr(content, group_key, items)
+        for group_key in ENTITY_KEYS:
+            if hasattr(content, group_key) and group_key in entities:
+                setattr(content, group_key, entities[group_key])
 
         for issue in validated.issues:
             if issue.severity == "ERROR":

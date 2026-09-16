@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { MessageSquare, Layers, Radio } from 'lucide-react'
+import { MessageSquare, Layers, Radio, Sparkles } from 'lucide-react'
 
-import { ConfidenceMeter, EmptyState, Panel, StatusDot } from '@/components/ui/primitives'
+import { EmptyState, Panel, StatusDot } from '@/components/ui/primitives'
 import { ROLE_STYLES } from '@/constants'
 import type { EvidenceLink, Speaker, TranscriptSegment } from '@/types'
 import { cn } from '@/utils/cn'
-import { formatTimestamp } from '@/utils/format'
+import { formatSpeakerDisplayName, formatTimestamp } from '@/utils/format'
 
 interface Props {
   segments: TranscriptSegment[]
@@ -40,11 +40,6 @@ export function TranscriptPanel({
     return counts
   }, [evidence])
 
-  const speakerNames = useMemo(
-    () => new Map(speakers.map((speaker) => [speaker.label, speaker.display_name ?? speaker.label])),
-    [speakers],
-  )
-
   // Auto-follow the live feed, but stop fighting the user once they scroll up.
   useEffect(() => {
     const node = scrollRef.current
@@ -62,14 +57,14 @@ export function TranscriptPanel({
 
   return (
     <Panel
-      title="Live Transcript"
-      icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
+      title="Conversation Transcript"
+      icon={<MessageSquare className="h-3.5 w-3.5 text-teal-600" aria-hidden />}
       actions={
         <>
           {actions}
-          <span className="mono flex items-center gap-1 text-2xs text-navy-500">
+          <span className="mono flex items-center gap-1 text-2xs text-slate-500">
             <Layers className="h-3 w-3" aria-hidden />
-            {segments.length}
+            {segments.length} lines
           </span>
           {live ? (
             <span className="flex items-center gap-1 text-2xs font-semibold uppercase tracking-wide text-rose-600">
@@ -79,60 +74,57 @@ export function TranscriptPanel({
           ) : null}
         </>
       }
-      bodyClassName="divide-y divide-navy-100"
+      bodyClassName="bg-slate-50/40 dark:bg-slate-950/40 p-3"
     >
-      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} className="h-full overflow-y-auto space-y-2.5 pr-1">
         {segments.length === 0 ? (
           <EmptyState
             icon={<Radio className="h-6 w-6" aria-hidden />}
             title="Waiting for speech"
-            detail="Transcript segments appear as soon as the pipeline detects voice activity and the ASR provider returns text."
+            detail="Transcript will appear in real time as the doctor and patient speak."
           />
         ) : (
-          <ol className="divide-y divide-navy-100">
+          <ol className="space-y-2.5">
             {segments.map((segment) => {
               const role = ROLE_STYLES[segment.role] ?? ROLE_STYLES.UNKNOWN
               const isSelected = selectedRef === segment.ref
               const isHighlighted = highlighted.has(segment.ref)
               const evidenceCount = evidenceCounts.get(segment.ref) ?? 0
+              const speaker = speakers.find((s) => s.label === segment.speaker_label)
+              const speakerInfo = formatSpeakerDisplayName(segment.speaker_label, segment.role, speaker?.display_name)
+
               return (
                 <li key={segment.ref}>
                   <button
                     type="button"
                     onClick={() => onSelect(isSelected ? null : segment.ref)}
                     className={cn(
-                      'flex w-full flex-col gap-1 border-l-2 px-3 py-2.5 text-left transition',
-                      role.accent,
+                      'group flex w-full flex-col gap-1.5 rounded-2xl border p-3 text-left transition-all duration-150',
                       isSelected
-                        ? 'bg-teal-50/80'
+                        ? 'border-teal-500 dark:border-teal-400 bg-teal-50/90 dark:bg-teal-950/60 shadow-sm ring-1 ring-teal-500/20'
                         : isHighlighted
-                          ? 'bg-amber-50/70'
-                          : 'bg-white hover:bg-navy-50/60',
+                          ? 'border-amber-400 dark:border-amber-600 bg-amber-50/80 dark:bg-amber-950/50 shadow-xs'
+                          : 'border-slate-200/70 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs',
                     )}
                     aria-current={isSelected}
                   >
                     <div className="flex items-center gap-2">
-                      <span className={cn('badge', role.badge)}>{role.label}</span>
-                      <span className="mono text-2xs text-navy-500">
+                      <span className={cn('badge rounded-full px-2.5 py-0.5 font-bold text-2xs shadow-2xs tracking-normal', role.badge)}>
+                        {speakerInfo.fullBadge}
+                      </span>
+                      <span className="mono text-2xs text-slate-400 dark:text-slate-500 font-medium">
                         {formatTimestamp(segment.start_time)}
                       </span>
-                      <span className="text-2xs text-navy-400">
-                        {speakerNames.get(segment.speaker_label ?? '') ?? segment.speaker_label ?? 'unassigned'}
-                      </span>
-                      <span className="mono text-2xs text-navy-300">{segment.ref}</span>
                       <span className="ml-auto flex items-center gap-1.5">
-                        {segment.overlapping ? (
-                          <span className="badge border-amber-200 bg-amber-50 text-amber-700">Overlap</span>
-                        ) : null}
                         {evidenceCount > 0 ? (
-                          <span className="badge border-teal-200 bg-teal-50 text-teal-700">
+                          <span className="inline-flex items-center gap-1 rounded-full border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 text-2xs font-semibold text-teal-700 dark:text-teal-300">
+                            <Sparkles className="h-2.5 w-2.5" />
                             {evidenceCount} cited
                           </span>
                         ) : null}
-                        <ConfidenceMeter value={segment.confidence} />
                       </span>
                     </div>
-                    <p className="text-sm leading-relaxed text-navy-900">{segment.text}</p>
+                    <p className="text-sm leading-relaxed text-slate-800 dark:text-slate-200 font-normal pl-0.5">{segment.text}</p>
                   </button>
                 </li>
               )

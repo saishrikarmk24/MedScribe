@@ -46,7 +46,7 @@ logger = get_logger(__name__)
 
 _AUTH_MARKERS = ("api key not valid", "api_key_invalid", "unauthenticated", "permission_denied", "401", "403")
 _RATE_MARKERS = ("resource_exhausted", "rate limit", "quota", "429")
-_UNAVAILABLE_MARKERS = ("unavailable", "internal error", "500", "503", "deadline")
+_UNAVAILABLE_MARKERS = ("unavailable", "internal error", "500", "502", "503", "504", "deadline", "10054", "forcibly closed", "connection reset", "remotedisconnected")
 _NOT_FOUND_MARKERS = ("not found", "404", "is not supported")
 
 

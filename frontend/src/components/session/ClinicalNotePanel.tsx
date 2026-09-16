@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Check, FileText, Link2, Pencil, ShieldAlert, X } from 'lucide-react'
+import { Check, Copy, FileText, Link2, Mic, Pencil, ShieldAlert, X } from 'lucide-react'
 
-import { ConfidenceMeter, EmptyState, InlineAlert, Panel } from '@/components/ui/primitives'
+import { EmptyState, InlineAlert, Panel } from '@/components/ui/primitives'
+import { VitalsDictationModal } from './VitalsDictationModal'
 import {
   ENTITY_STATUS_LABELS,
   ENTITY_STATUS_STYLES,
+  MOM_SECTION_LABELS,
   NOTE_STATUS_LABELS,
   NOTE_STATUS_STYLES,
   SECTION_HINTS,
@@ -18,8 +20,7 @@ import { formatRelative } from '@/utils/format'
 const ENTITY_GROUP_TITLES: Record<EntityGroupKey, string> = {
   symptoms: 'Symptoms',
   medications: 'Medications',
-  allergies: 'Allergies',
-  findings: 'Examination / Findings',
+  findings: 'Physical Examination Findings',
   investigations: 'Investigations',
 }
 
@@ -27,6 +28,8 @@ interface Props {
   note: ClinicalNote | null
   changedSections: string[]
   editable?: boolean
+  isMeeting?: boolean
+  encounterType?: string
   onShowSource: (targetKey: string, statement: string) => void
   onSaveSection?: (section: NoteSectionKey, text: string) => Promise<void>
   actions?: React.ReactNode
@@ -55,14 +58,44 @@ export function ClinicalNotePanel({
   note,
   changedSections,
   editable = false,
+  isMeeting = false,
+  encounterType,
   onShowSource,
   onSaveSection,
   actions,
 }: Props) {
+  const [copied, setCopied] = useState(false)
+  const [vitalsModalOpen, setVitalsModalOpen] = useState(false)
+  const meetingMode = isMeeting || encounterType === 'MEETING' || encounterType === 'MDT'
+  const sectionLabels = meetingMode ? MOM_SECTION_LABELS : SECTION_LABELS
+  const panelTitle = meetingMode ? 'Minutes of Meeting (MoM)' : 'Ambulatory Care Clinical Notes'
+
+  const handleAddVitals = async (vitalsSummary: string, medsSummary: string) => {
+    if (!onSaveSection || !note) return
+    const content = note.content
+    if (vitalsSummary) {
+      const existing = isDocumented(content.physical_examination) ? content.physical_examination.text : ''
+      const updated = existing ? `${existing}. ${vitalsSummary}` : vitalsSummary
+      await onSaveSection('physical_examination', updated)
+    }
+    if (medsSummary) {
+      const existing = isDocumented(content.current_medication) ? content.current_medication.text : ''
+      const updated = existing ? `${existing}. ${medsSummary}` : medsSummary
+      await onSaveSection('current_medication', updated)
+    }
+  }
+
   if (!note) {
     return (
-      <Panel title="Clinical Note" icon={<FileText className="h-3.5 w-3.5" aria-hidden />}>
-        <EmptyState title="No note yet" detail="The note is created as soon as the session is started." />
+      <Panel title={panelTitle} icon={<FileText className="h-3.5 w-3.5 text-teal-600" aria-hidden />}>
+        <EmptyState
+          title={meetingMode ? 'No meeting minutes generated yet' : 'No note generated yet'}
+          detail={
+            meetingMode
+              ? 'Meeting minutes and action items draft in real time as the discussion proceeds.'
+              : 'The clinical note drafts in real time as the consultation proceeds.'
+          }
+        />
       </Panel>
     )
   }
@@ -74,63 +107,122 @@ export function ClinicalNotePanel({
     .map((groupKey) => ({ groupKey, entities: content[groupKey] ?? [] }))
     .filter((group) => group.entities.length > 0)
 
-  return (
-    <Panel
-      title="Clinical Note"
-      icon={<FileText className="h-3.5 w-3.5" aria-hidden />}
-      actions={
-        <>
-          {actions}
-          <span className="mono text-2xs text-navy-500">v{note.version}</span>
-          <span className={cn('badge', NOTE_STATUS_STYLES[note.status])}>{NOTE_STATUS_LABELS[note.status]}</span>
-        </>
+  const copyNote = async () => {
+    const lines: string[] = []
+    lines.push(meetingMode ? 'MINUTES OF MEETING (MoM)' : 'AMBULATORY CARE CLINICAL NOTES')
+    lines.push(`Status: ${NOTE_STATUS_LABELS[note.status]}`)
+    if (note.approved_by) lines.push(`Approved by: ${note.approved_by}`)
+    lines.push('----------------------------------------\n')
+
+    for (const key of SECTION_ORDER) {
+      const section = content[key]
+      if (isDocumented(section)) {
+        lines.push(`${(sectionLabels[key] || SECTION_LABELS[key]).toUpperCase()}:`)
+        lines.push(`${section.text}\n`)
       }
-    >
-      <div className="space-y-3 p-3">
-        <div className="flex flex-wrap items-center gap-2 text-2xs text-navy-500">
-          <span>updated {formatRelative(note.updated_at)}</span>
-          {note.model ? <span className="mono">{note.model}</span> : null}
-          {note.approved_by ? <span>approved by {note.approved_by}</span> : null}
+    }
+
+    for (const groupKey of Object.keys(ENTITY_GROUP_TITLES) as EntityGroupKey[]) {
+      const entities = content[groupKey] ?? []
+      if (entities.length > 0) {
+        lines.push(`${ENTITY_GROUP_TITLES[groupKey].toUpperCase()}:`)
+        lines.push(entities.map((e) => `- ${e.normalized_value ? e.normalized_value : e.value}${e.detail ? ` (${e.detail})` : ''}`).join('\n'))
+        lines.push('')
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {}
+  }
+
+  return (
+    <>
+      <Panel
+        title={panelTitle}
+        icon={<FileText className="h-3.5 w-3.5 text-teal-600" aria-hidden />}
+        actions={
+          <>
+            {actions}
+            {!meetingMode && editable && onSaveSection ? (
+              <button
+                type="button"
+                onClick={() => setVitalsModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/60 px-2.5 py-1 text-2xs font-semibold text-teal-800 dark:text-teal-300 shadow-2xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition-all"
+                title="Dictate or add patient vitals & medications"
+              >
+                <Mic className="h-3 w-3 text-teal-700 dark:text-teal-400" aria-hidden />
+                <span>Dictate Vitals & Meds</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void copyNote()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-2xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs transition-all hover:border-teal-500 hover:text-teal-700 dark:hover:border-teal-400 dark:hover:text-teal-300"
+              title="Copy clinical note to clipboard"
+            >
+              {copied ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3 text-slate-500 dark:text-slate-400" />}
+              {copied ? 'Copied' : 'Copy Note'}
+            </button>
+            <span className={cn('badge rounded-full px-2.5 py-0.5 text-2xs font-semibold shadow-2xs', NOTE_STATUS_STYLES[note.status])}>
+              {NOTE_STATUS_LABELS[note.status]}
+            </span>
+          </>
+        }
+      >
+        <div className="space-y-3 p-3.5">
+          <div className="flex flex-wrap items-center justify-between text-2xs text-slate-400 dark:text-slate-500">
+            <span>Updated {formatRelative(note.updated_at)}</span>
+            {note.approved_by ? <span className="font-medium text-teal-700 dark:text-teal-400">Signed by {note.approved_by}</span> : null}
+          </div>
+
+          {flagged.length > 0 ? (
+            <InlineAlert kind="warning" title={`${flagged.length} item(s) require review`}>
+              <ul className="mt-1 space-y-0.5">
+                {flagged.map((flag) => (
+                  <li key={`${flag.section}-${flag.reason}`}>
+                    <span className="font-semibold">{flag.label}:</span> {flag.reason}
+                  </li>
+                ))}
+              </ul>
+            </InlineAlert>
+          ) : null}
+
+          {visibleSections.map((key) => (
+            <NoteSection
+              key={key}
+              sectionKey={key}
+              section={content[key]}
+              changed={changedSections.includes(key)}
+              editable={editable}
+              onShowSource={onShowSource}
+              onSave={onSaveSection}
+            />
+          ))}
+
+          {visibleGroups.map((group) => (
+            <EntityGroup
+              key={group.groupKey}
+              title={ENTITY_GROUP_TITLES[group.groupKey]}
+              entities={group.entities}
+              onShowSource={onShowSource}
+            />
+          ))}
+
+          {visibleSections.length === 0 && visibleGroups.length === 0 ? (
+            <EmptyState title="Nothing documented yet" detail="Sections will automatically appear as discussion topics are mentioned." />
+          ) : null}
         </div>
+      </Panel>
 
-        {flagged.length > 0 ? (
-          <InlineAlert kind="warning" title={`${flagged.length} item(s) require review`}>
-            <ul className="mt-1 space-y-0.5">
-              {flagged.map((flag) => (
-                <li key={`${flag.section}-${flag.reason}`}>
-                  <span className="font-semibold">{flag.label}:</span> {flag.reason}
-                </li>
-              ))}
-            </ul>
-          </InlineAlert>
-        ) : null}
-
-        {visibleSections.map((key) => (
-          <NoteSection
-            key={key}
-            sectionKey={key}
-            section={content[key]}
-            changed={changedSections.includes(key)}
-            editable={editable}
-            onShowSource={onShowSource}
-            onSave={onSaveSection}
-          />
-        ))}
-
-        {visibleGroups.map((group) => (
-          <EntityGroup
-            key={group.groupKey}
-            title={ENTITY_GROUP_TITLES[group.groupKey]}
-            entities={group.entities}
-            onShowSource={onShowSource}
-          />
-        ))}
-
-        {visibleSections.length === 0 && visibleGroups.length === 0 ? (
-          <EmptyState title="Nothing documented yet" detail="Sections only appear when they were stated in the conversation." />
-        ) : null}
-      </div>
-    </Panel>
+      <VitalsDictationModal
+        open={vitalsModalOpen}
+        onClose={() => setVitalsModalOpen(false)}
+        onAddVitals={handleAddVitals}
+      />
+    </>
   )
 }
 
@@ -175,35 +267,36 @@ function NoteSection({
   return (
     <article
       className={cn(
-        'rounded border bg-white transition',
-        needsReview ? 'border-amber-300' : 'border-navy-200/80',
-        changed && 'ring-1 ring-teal-400/60',
+        'overflow-hidden rounded-xl border bg-white dark:bg-slate-900 shadow-2xs transition-all duration-150',
+        needsReview
+          ? 'border-amber-300 dark:border-amber-700 ring-1 ring-amber-200 dark:ring-amber-900/40'
+          : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700',
+        changed && 'ring-2 ring-teal-500/30',
       )}
     >
-      <header className="flex flex-wrap items-center gap-1.5 border-b border-navy-100 bg-navy-50/50 px-2.5 py-1.5">
-        <h3 className="text-2xs font-semibold uppercase tracking-[0.12em] text-navy-700">
+      <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 px-3.5 py-2">
+        <h3 className="text-2xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
           {SECTION_LABELS[sectionKey]}
         </h3>
         {section.edited_by_human ? (
-          <span className="badge border-navy-300 bg-white text-navy-600">Human edited</span>
-        ) : (
-          <span className="badge border-teal-200 bg-teal-50 text-teal-700">AI generated</span>
-        )}
+          <span className="badge rounded-full border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-2xs text-slate-600 dark:text-slate-300">
+            Edited
+          </span>
+        ) : null}
         {needsReview ? (
-          <span className="badge border-amber-300 bg-amber-50 text-amber-800">
+          <span className="badge rounded-full border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 text-2xs font-semibold text-amber-800 dark:text-amber-300">
             <ShieldAlert className="h-3 w-3" aria-hidden /> Review
           </span>
         ) : null}
-        <span className="ml-auto flex items-center gap-2">
-          <ConfidenceMeter value={section.confidence} />
+        <span className="ml-auto flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => onShowSource(sectionKey, section.text)}
             aria-label={`Show source for ${SECTION_LABELS[sectionKey]}`}
-            className="inline-flex items-center gap-1 rounded border border-navy-200 bg-white px-1.5 py-0.5 text-2xs font-semibold text-navy-600 hover:border-teal-400 hover:text-teal-700"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-2xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs hover:border-teal-400 hover:text-teal-700 dark:hover:text-teal-300"
           >
             <Link2 className="h-3 w-3" aria-hidden />
-            Show Source ({evidenceCount})
+            Sources ({evidenceCount})
           </button>
           {editable ? (
             editing ? (
@@ -212,7 +305,7 @@ function NoteSection({
                   type="button"
                   onClick={() => void save()}
                   disabled={saving}
-                  className="inline-flex items-center gap-1 rounded border border-teal-600 bg-teal-600 px-1.5 py-0.5 text-2xs font-semibold text-white disabled:opacity-60"
+                  className="inline-flex items-center gap-1 rounded-md border border-teal-600 bg-teal-600 px-2 py-0.5 text-2xs font-semibold text-white shadow-2xs disabled:opacity-60"
                 >
                   <Check className="h-3 w-3" aria-hidden />
                   Save
@@ -223,7 +316,7 @@ function NoteSection({
                     setEditing(false)
                     setDraft(section.text)
                   }}
-                  className="inline-flex items-center rounded border border-navy-200 px-1.5 py-0.5 text-2xs font-semibold text-navy-600"
+                  className="inline-flex items-center rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-semibold text-slate-600 dark:text-slate-300"
                 >
                   <X className="h-3 w-3" aria-hidden />
                 </button>
@@ -232,9 +325,9 @@ function NoteSection({
               <button
                 type="button"
                 onClick={() => setEditing(true)}
-                className="inline-flex items-center gap-1 rounded border border-navy-200 bg-white px-1.5 py-0.5 text-2xs font-semibold text-navy-600 hover:border-navy-400"
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-0.5 text-2xs font-semibold text-slate-600 dark:text-slate-300 shadow-2xs hover:border-slate-300 dark:hover:border-slate-600"
               >
-                <Pencil className="h-3 w-3" aria-hidden />
+                <Pencil className="h-3 w-3 text-slate-400" aria-hidden />
                 Edit
               </button>
             )
@@ -242,23 +335,25 @@ function NoteSection({
         </span>
       </header>
 
-      <div className="px-2.5 py-2">
+      <div className="p-3.5">
         {editing ? (
           <>
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               rows={4}
-              className="field-input font-normal"
+              className="field-input font-normal dark:bg-slate-950 dark:border-slate-700 dark:text-slate-100"
               aria-label={`Edit ${SECTION_LABELS[sectionKey]}`}
             />
-            <p className="mt-1 text-2xs text-navy-500">{SECTION_HINTS[sectionKey]}</p>
+            <p className="mt-1.5 text-2xs text-slate-500 dark:text-slate-400">{SECTION_HINTS[sectionKey]}</p>
           </>
+        ) : isDocumented(section) ? (
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800 dark:text-slate-200 font-normal">{section.text}</p>
         ) : (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-navy-900">{section.text}</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500 italic font-normal">— Not discussed in consultation —</p>
         )}
         {needsReview && section.review_reason ? (
-          <p className="mt-1.5 text-2xs text-amber-700">{section.review_reason}</p>
+          <p className="mt-2 text-2xs font-medium text-amber-700 dark:text-amber-400">{section.review_reason}</p>
         ) : null}
       </div>
     </article>
@@ -275,27 +370,32 @@ function EntityGroup({
   onShowSource: (targetKey: string, statement: string) => void
 }) {
   return (
-    <article className="rounded border border-navy-200/80 bg-white">
-      <header className="flex items-center gap-2 border-b border-navy-100 bg-navy-50/50 px-2.5 py-1.5">
-        <h3 className="text-2xs font-semibold uppercase tracking-[0.12em] text-navy-700">{title}</h3>
-        <span className="mono ml-auto text-2xs text-navy-400">{entities.length}</span>
+    <article className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs">
+      <header className="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 px-3.5 py-2">
+        <h3 className="text-2xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">{title}</h3>
+        <span className="mono ml-auto text-2xs font-semibold text-slate-400 dark:text-slate-500">{entities.length}</span>
       </header>
-      <div className="px-2.5 py-2">
-        <ul className="space-y-1">
+      <div className="p-3.5">
+        <ul className="space-y-1.5">
           {entities.map((entity) => (
-            <li key={entity.ref} className="flex flex-wrap items-center gap-1.5 text-xs">
-              <span className={cn('badge', ENTITY_STATUS_STYLES[entity.status])}>
+            <li key={entity.ref} className="flex flex-wrap items-center gap-2 text-xs">
+              <span className={cn('badge rounded-full px-2 py-0.5 text-2xs font-semibold', ENTITY_STATUS_STYLES[entity.status])}>
                 {ENTITY_STATUS_LABELS[entity.status]}
               </span>
-              <span className="font-medium text-navy-900">{entity.value}</span>
-              {entity.detail ? <span className="text-navy-500">— {entity.detail}</span> : null}
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {entity.normalized_value ? entity.normalized_value : entity.value}
+              </span>
+              {entity.normalized_value && entity.normalized_value.toLowerCase() !== entity.value.toLowerCase() ? (
+                <span className="text-2xs text-slate-400 dark:text-slate-500 italic">(&ldquo;{entity.value}&rdquo;)</span>
+              ) : null}
+              {entity.detail ? <span className="text-slate-500 dark:text-slate-400">— {entity.detail}</span> : null}
               <button
                 type="button"
                 onClick={() => onShowSource(entity.ref, entity.value)}
-                className="ml-auto inline-flex items-center gap-1 text-2xs font-semibold text-navy-500 hover:text-teal-700"
+                className="ml-auto inline-flex items-center gap-1 text-2xs font-medium text-slate-400 hover:text-teal-700 dark:hover:text-teal-400"
               >
                 <Link2 className="h-3 w-3" aria-hidden />
-                Source
+                Sources
               </button>
             </li>
           ))}

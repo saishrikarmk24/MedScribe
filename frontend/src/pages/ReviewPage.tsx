@@ -3,26 +3,33 @@ import { Link, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   BadgeCheck,
-  Download,
-  FileJson,
+  CheckCircle2,
   FileText,
   History,
+  Info,
+  Link2,
+  ListFilter,
   RotateCcw,
+  ShieldAlert,
   ShieldCheck,
-  Stethoscope,
+  X,
 } from 'lucide-react'
 
 import { ClinicalNotePanel } from '@/components/session/ClinicalNotePanel'
 import { EvidenceViewer } from '@/components/session/EvidenceViewer'
 import { SpeakerRoster } from '@/components/session/SpeakerRoster'
 import { TranscriptPanel } from '@/components/session/TranscriptPanel'
-import { InlineAlert, Panel, Spinner, StatCard } from '@/components/ui/primitives'
-import { NOTE_STATUS_LABELS } from '@/constants'
+import { EmptyState, InlineAlert, Spinner } from '@/components/ui/primitives'
+import { MedicalPulseLoader, TabTransition } from '@/components/ui/MedicalAnimations'
+import { ENTITY_STATUS_LABELS, ENTITY_STATUS_STYLES } from '@/constants'
 import { api, downloadBlob } from '@/services/api'
 import { useSessionStore } from '@/store/sessionStore'
 import { useUiStore } from '@/store/uiStore'
 import type { ExportFormat, NoteSectionKey, NoteVersion } from '@/types'
-import { formatDateTime, formatDuration } from '@/utils/format'
+import { cn } from '@/utils/cn'
+import { formatDateTime, formatDuration, formatTimestamp, titleCase } from '@/utils/format'
+
+type SidebarTab = 'entities' | 'evidence' | 'versions' | 'info'
 
 export function ReviewPage() {
   const { id } = useParams<{ id: string }>()
@@ -50,6 +57,8 @@ export function ReviewPage() {
   const [acknowledged, setAcknowledged] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showApproveModal, setShowApproveModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<SidebarTab>('entities')
 
   useEffect(() => {
     if (!id) return
@@ -97,9 +106,10 @@ export function ReviewPage() {
     try {
       const updated = await api.approveNote(note.id, identityName)
       setNote(updated)
+      setShowApproveModal(false)
       await refresh()
       loadVersions()
-      pushToast({ kind: 'success', title: 'Note approved', detail: `Approved by ${identityName}.` })
+      pushToast({ kind: 'success', title: 'Note approved & signed', detail: `Signed by ${identityName}.` })
     } catch (err) {
       pushToast({ kind: 'error', title: 'Approval blocked', detail: (err as Error).message })
     } finally {
@@ -151,8 +161,11 @@ export function ReviewPage() {
 
   if (!session || !note) {
     return (
-      <div className="flex h-full items-center justify-center gap-2 text-sm text-navy-500">
-        <Spinner /> Loading review workspace…
+      <div className="flex h-full items-center justify-center p-12">
+        <MedicalPulseLoader
+          label="Loading Clinical Review Workspace..."
+          sublabel="Verifying EHR provenance, ambulatory care narrative, and diagnostic orders"
+        />
       </div>
     )
   }
@@ -162,41 +175,137 @@ export function ReviewPage() {
   const isApproved = note.status === 'APPROVED' || note.status === 'EXPORTED'
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-navy-200 bg-white px-4 py-2.5">
-        <Link to={`/sessions/${session.id}/live`} className="btn-secondary">
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          Return to Session
-        </Link>
-        <div className="leading-tight">
-          <p className="mono text-xs font-semibold text-navy-900">{session.reference}</p>
-          <p className="text-2xs text-navy-500">
-            {session.name} · patient {session.patient_id} · {formatDuration(session.duration_seconds)}
-          </p>
+    <div className="flex h-full min-h-0 flex-col bg-slate-100/60 dark:bg-slate-950 animate-fade-in-up">
+      {/* Top Main Header */}
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-2.5 shadow-sm">
+        <div className="flex items-center gap-3">
+          <Link to={`/sessions/${session.id}/live`} className="btn-secondary !py-1 text-xs">
+            <ArrowLeft className="h-4 w-4" aria-hidden />
+            Return to Session
+          </Link>
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+          <div className="leading-tight">
+            <div className="flex items-center gap-2">
+              <span className="mono text-xs font-bold text-slate-900 dark:text-slate-100">{session.reference}</span>
+              <span className="text-2xs font-medium text-slate-500">·</span>
+              <span className="text-xs font-medium text-slate-700 dark:text-slate-300">Patient {session.patient_id}</span>
+              <span className="text-2xs font-medium text-slate-500">·</span>
+              <span className="text-2xs text-slate-500">{formatDuration(session.duration_seconds)}</span>
+            </div>
+            <p className="truncate text-2xs text-slate-500">{session.name}</p>
+          </div>
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportAs('JSON')}>
-            <FileJson className="h-4 w-4" aria-hidden />
-            JSON
-          </button>
-          <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportAs('PDF')}>
-            <FileText className="h-4 w-4" aria-hidden />
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Quick Export Actions */}
+          <button
+            type="button"
+            className="btn-secondary !py-1 text-xs"
+            disabled={busy}
+            onClick={() => void exportAs('PDF')}
+            title="Download formatted clinical PDF note"
+          >
+            <FileText className="h-3.5 w-3.5 text-rose-600" aria-hidden />
             PDF
           </button>
-          <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportAs('FHIR')}>
-            <Download className="h-4 w-4" aria-hidden />
-            FHIR JSON
+          {/* FHIR & JSON exports temporarily removed from public view - can be reactivated later:
+          <button
+            type="button"
+            className="btn-secondary !py-1 text-xs"
+            disabled={busy}
+            onClick={() => void exportAs('FHIR')}
+            title="Export FHIR JSON bundle"
+          >
+            <Download className="h-3.5 w-3.5 text-teal-600" aria-hidden />
+            FHIR
           </button>
+          <button
+            type="button"
+            className="btn-secondary !py-1 text-xs"
+            disabled={busy}
+            onClick={() => void exportAs('JSON')}
+            title="Export full session JSON"
+          >
+            <FileJson className="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" aria-hidden />
+            JSON
+          </button>
+          */}
+
           {isApproved ? (
-            <button type="button" className="btn-secondary" disabled={busy} onClick={() => void reopen()}>
-              <RotateCcw className="h-4 w-4" aria-hidden />
-              Reopen
+            <button
+              type="button"
+              className="btn-secondary !py-1 text-xs font-medium text-slate-700 dark:text-slate-200"
+              disabled={busy}
+              onClick={() => void reopen()}
+              title="Reopen note for additional clinical edits"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-slate-500" aria-hidden />
+              Reopen Note
             </button>
           ) : null}
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 p-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.8fr)]">
+      {/* Prominent Sticky Clinical Approval Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-2 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          {isApproved ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-3 py-1 text-xs font-semibold text-emerald-800 dark:text-emerald-300 shadow-sm">
+              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+              Approved & Signed by {note.approved_by ?? identityName}
+              <span className="text-2xs font-normal text-emerald-700 dark:text-emerald-400">({formatDateTime(note.approved_at)})</span>
+            </span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:text-amber-300">
+                <ShieldAlert className="h-3.5 w-3.5 text-amber-600" />
+                Pending Doctor Review & Approval
+              </span>
+              {flags.length > 0 ? (
+                <span className="text-2xs font-medium text-amber-700 dark:text-amber-400">({flags.length} items flagged)</span>
+              ) : (
+                <span className="text-2xs text-slate-500">All statements cited with transcript evidence</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {!isApproved ? (
+            <button
+              type="button"
+              className="btn-teal flex items-center gap-1.5 shadow-sm text-xs font-semibold px-4 py-1.5 rounded-lg"
+              disabled={busy || !approvable || flags.length > 0}
+              onClick={() => setShowApproveModal(true)}
+              title={flags.length > 0 ? 'Resolve review flags before approving' : 'Approve and sign clinical note'}
+            >
+              <BadgeCheck className="h-4 w-4" aria-hidden />
+              Approve & Sign Note
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Flagged Review Items Alert */}
+      {flags.length > 0 ? (
+        <div className="border-b border-amber-200 dark:border-amber-900/60 bg-amber-50 dark:bg-amber-950/40 px-4 py-2 text-xs text-amber-900 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-semibold">
+            <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0" />
+            <span>Items requiring clinical review prior to approval:</span>
+          </div>
+          <ul className="mt-1 ml-6 list-disc space-y-0.5 text-2xs text-amber-800 dark:text-amber-300">
+            {flags.map((flag) => (
+              <li key={`${flag.section}-${flag.reason}`}>
+                <span className="font-semibold">{flag.label}:</span> {flag.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* Main 3-Column Workstation Layout */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-2 p-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,0.85fr)]">
+        {/* Col 1: Transcript Panel & Speakers */}
         <div className="flex min-h-0 flex-col gap-2">
           <TranscriptPanel
             segments={segments}
@@ -210,111 +319,256 @@ export function ReviewPage() {
           <SpeakerRoster speakers={speakers} editable={!isApproved} onChanged={() => void refresh()} />
         </div>
 
+        {/* Col 2: Clinical Note with Inline Editing */}
         <ClinicalNotePanel
           note={note}
+          encounterType={session.simulation_type}
           changedSections={[]}
           editable={!isApproved}
           onShowSource={(targetKey, statement) => focusEvidence({ targetKey, statement, kind: 'SECTION' })}
           onSaveSection={saveSection}
         />
 
-        <div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
-          <div className="grid grid-cols-2 gap-2">
-            <StatCard label="Evidence links" value={`${stats.validated}/${stats.total}`} detail="validated" />
-            <StatCard label="Entities" value={entities.length} detail="extracted" />
-            <StatCard
-              label="Note status"
-              value={NOTE_STATUS_LABELS[note.status]}
-              tone={isApproved ? 'approved' : flags.length > 0 ? 'review' : 'default'}
-            />
+        {/* Col 3: Tabbed Clinical Insights, Evidence, Versions & Info */}
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-panel">
+          {/* Tabs Navigation */}
+          <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-950/70 p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('entities')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-2xs font-semibold transition',
+                activeTab === 'entities'
+                  ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <ListFilter className="h-3 w-3" />
+              Facts ({entities.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('evidence')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-2xs font-semibold transition',
+                activeTab === 'evidence'
+                  ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <Link2 className="h-3 w-3" />
+              Evidence ({stats.validated})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('versions')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-2xs font-semibold transition',
+                activeTab === 'versions'
+                  ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <History className="h-3 w-3" />
+              History ({versions.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('info')}
+              className={cn(
+                'flex flex-1 items-center justify-center gap-1.5 rounded-md py-1.5 text-2xs font-semibold transition',
+                activeTab === 'info'
+                  ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-400 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <Info className="h-3 w-3" />
+              Encounter
+            </button>
           </div>
 
-          <Panel title="Human-in-the-loop approval" icon={<ShieldCheck className="h-3.5 w-3.5" aria-hidden />} bodyClassName="space-y-2 p-3">
-            {flags.length > 0 ? (
-              <InlineAlert kind="warning" title="Resolve these items before approval">
-                <ul className="mt-1 space-y-0.5">
-                  {flags.map((flag) => (
-                    <li key={`${flag.section}-${flag.reason}`}>
-                      <span className="font-semibold">{flag.label}:</span> {flag.reason}
-                    </li>
-                  ))}
-                </ul>
-              </InlineAlert>
-            ) : (
-              <InlineAlert kind="info" title="No outstanding review flags">
-                Every documented statement is linked to transcript evidence.
-              </InlineAlert>
-            )}
-
-            {isApproved ? (
-              <InlineAlert kind="success" title={`Approved by ${note.approved_by ?? 'reviewer'}`}>
-                {formatDateTime(note.approved_at)}
-                {note.exported_at ? ` · exported ${formatDateTime(note.exported_at)}` : ''}
-              </InlineAlert>
-            ) : (
-              <>
-                <label className="flex items-start gap-2 rounded border border-navy-200 bg-navy-50/60 p-2.5 text-xs leading-relaxed text-navy-700">
-                  <input
-                    type="checkbox"
-                    checked={acknowledged}
-                    onChange={(event) => setAcknowledged(event.target.checked)}
-                    className="mt-0.5 h-3.5 w-3.5 rounded border-navy-300 text-teal-600 focus:ring-teal-500"
+          {/* Tab Content */}
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <TabTransition tabKey={activeTab}>
+              {activeTab === 'entities' && (
+              <div className="space-y-2">
+                {entities.length === 0 ? (
+                  <EmptyState
+                    title="No clinical facts extracted"
+                    detail="Structured symptoms, medications, and findings will appear here."
                   />
-                  <span>
-                    I have read this note and its supporting evidence. I confirm it reflects the encounter and
-                    accept clinical responsibility for the documentation.
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  className="btn-teal w-full"
-                  disabled={busy || !acknowledged || !approvable || flags.length > 0}
-                  onClick={() => void approve()}
-                >
-                  <BadgeCheck className="h-4 w-4" aria-hidden />
-                  Approve Note
-                </button>
-                <p className="text-2xs leading-relaxed text-navy-500">
-                  AI-generated documentation is never auto-approved. Approval always requires an explicit human action
-                  from a DOCTOR or FACULTY role.
-                </p>
-              </>
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {entities.map((entity) => (
+                      <li key={entity.ref} className="py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn('badge', ENTITY_STATUS_STYLES[entity.status])}>
+                            {ENTITY_STATUS_LABELS[entity.status]}
+                          </span>
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-900 dark:text-slate-100">
+                            {entity.value}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => focusEvidence({ targetKey: entity.ref, statement: entity.value, kind: 'ENTITY' })}
+                            className="shrink-0 text-2xs font-semibold text-slate-500 hover:text-teal-700 dark:text-slate-400 dark:hover:text-teal-400"
+                            title="View transcript citation"
+                          >
+                            <Link2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                        <div className="mt-0.5 flex items-center justify-between text-2xs text-slate-500 dark:text-slate-400">
+                          <span>{titleCase(entity.entity_type)}</span>
+                          {entity.detail ? <span className="text-slate-400 dark:text-slate-500">({entity.detail})</span> : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
-          </Panel>
 
-          <Panel title="Version history" icon={<History className="h-3.5 w-3.5" aria-hidden />}>
-            {versions.length === 0 ? (
-              <p className="p-3 text-xs text-navy-500">No versions recorded yet.</p>
-            ) : (
-              <ol className="divide-y divide-navy-50">
-                {versions.map((version) => (
-                  <li key={version.id} className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="mono text-2xs font-semibold text-navy-800">v{version.version}</span>
-                      <span className="badge border-navy-200 bg-navy-50 text-navy-600">{version.author_type}</span>
-                      <span className="ml-auto text-2xs text-navy-400">{formatDateTime(version.created_at)}</span>
-                    </div>
-                    <p className="mt-0.5 text-2xs text-navy-600">{version.change_summary ?? '—'}</p>
-                    {version.changed_sections?.length ? (
-                      <p className="mono mt-0.5 text-2xs text-navy-400">{version.changed_sections.join(', ')}</p>
-                    ) : null}
-                  </li>
-                ))}
-              </ol>
+            {activeTab === 'evidence' && (
+              <div className="space-y-2">
+                {evidence.length === 0 ? (
+                  <EmptyState
+                    title="No evidence citations"
+                    detail="All clinical statements are linked to audio segments."
+                  />
+                ) : (
+                  <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {evidence.map((link) => (
+                      <li key={link.id}>
+                        <button
+                          type="button"
+                          onClick={() => selectSegment(link.segment_ref)}
+                          className="w-full rounded p-1.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60 transition"
+                        >
+                          <div className="flex items-center gap-1.5 text-2xs text-slate-500 dark:text-slate-400">
+                            <span className="mono font-semibold text-teal-700 dark:text-teal-400">{link.segment_ref ?? 'citation'}</span>
+                            <span>·</span>
+                            <span>{formatTimestamp(link.timestamp ?? 0)}</span>
+                            {link.validated ? (
+                              <span className="ml-auto text-2xs text-emerald-700 dark:text-emerald-400 font-medium flex items-center gap-0.5">
+                                <CheckCircle2 className="h-3 w-3" /> Verified
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-0.5 text-xs text-slate-800 dark:text-slate-200 line-clamp-2">{link.clinical_statement}</p>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
-          </Panel>
 
-          <Panel title="Session metadata" icon={<Stethoscope className="h-3.5 w-3.5" aria-hidden />} bodyClassName="p-3">
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-2xs">
-              <Meta label="Scenario" value={session.scenario ?? '—'} />
-              <Meta label="Encounter type" value={session.simulation_type} />
-              <Meta label="Doctor" value={session.doctor_name ?? '—'} />
-              <Meta label="Started" value={formatDateTime(session.started_at)} />
-              <Meta label="Ended" value={formatDateTime(session.ended_at)} />
-            </dl>
-          </Panel>
+            {activeTab === 'versions' && (
+              <div className="space-y-2">
+                {versions.length === 0 ? (
+                  <EmptyState title="No version history" detail="Edits and AI updates will appear here." />
+                ) : (
+                  <ol className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {versions.map((version) => (
+                      <li key={version.id} className="py-2 text-2xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="mono font-semibold text-slate-900 dark:text-slate-100">v{version.version}</span>
+                          <span className="badge border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            {version.author_type}
+                          </span>
+                          <span className="ml-auto text-slate-400 dark:text-slate-500">{formatDateTime(version.created_at)}</span>
+                        </div>
+                        <p className="mt-1 text-slate-700 dark:text-slate-300">{version.change_summary ?? 'Clinical update'}</p>
+                        {version.changed_sections?.length ? (
+                          <p className="mono mt-0.5 text-slate-400 dark:text-slate-500">Sections: {version.changed_sections.join(', ')}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'info' && (
+              <div className="space-y-3">
+                <dl className="grid grid-cols-2 gap-x-2 gap-y-2 text-2xs">
+                  <Meta label="Patient ID" value={session.patient_id} />
+                  <Meta label="Doctor" value={session.doctor_name ?? 'Dr. Clinician'} />
+                  <Meta label="Encounter Type" value={session.simulation_type} />
+                  <Meta label="Encounter Duration" value={formatDuration(session.duration_seconds)} />
+                  <Meta label="Started" value={formatDateTime(session.started_at)} />
+                  <Meta label="Ended" value={formatDateTime(session.ended_at)} />
+                </dl>
+                {session.scenario ? (
+                  <div className="rounded bg-slate-50 dark:bg-slate-800/60 p-2 text-2xs">
+                    <p className="font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Scenario Context</p>
+                    <p className="mt-0.5 text-slate-700 dark:text-slate-300">{session.scenario}</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+            </TabTransition>
+          </div>
         </div>
       </div>
+
+      {/* 1-Click Doctor Sign-off Modal */}
+      {showApproveModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-2xl border border-slate-200 dark:border-slate-800 animate-scale-spring">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-teal-700 dark:text-teal-400 font-semibold text-sm">
+                <ShieldCheck className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                Sign & Finalize Clinical Note
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowApproveModal(false)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-3">
+              <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
+                You are approving documentation for <span className="font-semibold text-slate-900 dark:text-slate-100">Patient {session.patient_id}</span> ({session.reference}).
+              </p>
+
+              <label className="flex items-start gap-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 p-3 text-xs leading-relaxed text-slate-700 dark:text-slate-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={acknowledged}
+                  onChange={(event) => setAcknowledged(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-teal-600 focus:ring-teal-500"
+                />
+                <span>
+                  I confirm that I have reviewed this note and its supporting evidence, and I accept clinical responsibility for this record.
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                className="btn-secondary text-xs"
+                onClick={() => setShowApproveModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-teal text-xs font-semibold flex items-center gap-1.5 px-4 py-2"
+                disabled={busy || !acknowledged}
+                onClick={() => void approve()}
+              >
+                {busy ? <Spinner /> : <BadgeCheck className="h-4 w-4" />}
+                Sign & Approve Note
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {evidenceFocus ? (
         <div className="pointer-events-none fixed inset-y-0 right-0 flex">
@@ -335,9 +589,9 @@ export function ReviewPage() {
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <>
-      <dt className="font-semibold uppercase tracking-[0.1em] text-navy-500">{label}</dt>
-      <dd className="truncate text-navy-800">{value}</dd>
-    </>
+    <div>
+      <dt className="text-2xs font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">{label}</dt>
+      <dd className="truncate text-xs font-medium text-slate-800 dark:text-slate-200">{value}</dd>
+    </div>
   )
 }

@@ -11,17 +11,42 @@ export interface Toast {
   detail?: string
 }
 
+export type Theme = 'dark' | 'light'
+
 interface UiState {
   identityEmail: string
   identityRole: string
   identityName: string
+  theme: Theme
   toasts: Toast[]
   setIdentity: (email: string, role: string, name: string) => void
+  setTheme: (theme: Theme) => void
+  toggleTheme: () => void
   pushToast: (toast: Omit<Toast, 'id'>) => void
   dismissToast: (id: string) => void
 }
 
 const STORAGE_KEY = 'medscribe.identity'
+const THEME_STORAGE_KEY = 'medscribe.theme'
+
+function loadTheme(): Theme {
+  if (typeof localStorage === 'undefined') return 'dark'
+  const saved = localStorage.getItem(THEME_STORAGE_KEY)
+  return saved === 'light' ? 'light' : 'dark' // default to dark
+}
+
+function applyTheme(theme: Theme): void {
+  if (typeof document !== 'undefined') {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }
+}
+
+const initialTheme = loadTheme()
+applyTheme(initialTheme)
 
 function loadIdentity(): { email: string; role: string; name: string } {
   if (typeof localStorage === 'undefined') {
@@ -43,7 +68,21 @@ export const useUiStore = create<UiState>((set, get) => ({
   identityEmail: stored.email,
   identityRole: stored.role,
   identityName: stored.name,
+  theme: initialTheme,
   toasts: [],
+
+  setTheme: (theme) => {
+    applyTheme(theme)
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(THEME_STORAGE_KEY, theme)
+    }
+    set({ theme })
+  },
+
+  toggleTheme: () => {
+    const next = get().theme === 'dark' ? 'light' : 'dark'
+    get().setTheme(next)
+  },
 
   setIdentity: (email, role, name) => {
     setIdentity({ email, role })

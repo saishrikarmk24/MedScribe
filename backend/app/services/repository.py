@@ -92,7 +92,7 @@ async def list_sessions(
     return list(result.scalars().all()), total
 
 
-async def session_counts(db: AsyncSession, session_id: uuid.UUID) -> tuple[int, int]:
+async def session_counts(db: AsyncSession, session_id: uuid.UUID) -> tuple[int, int, float]:
     segments = int(
         (
             await db.execute(
@@ -109,7 +109,15 @@ async def session_counts(db: AsyncSession, session_id: uuid.UUID) -> tuple[int, 
         ).scalar()
         or 0
     )
-    return segments, entities
+    max_duration = float(
+        (
+            await db.execute(
+                select(func.max(TranscriptSegment.end_time)).where(TranscriptSegment.session_id == session_id)
+            )
+        ).scalar()
+        or 0.0
+    )
+    return segments, entities, max_duration
 
 
 def session_duration(session: SessionModel) -> float:
@@ -125,9 +133,10 @@ def session_duration(session: SessionModel) -> float:
 
 
 async def serialize_session(db: AsyncSession, session: SessionModel) -> SessionOut:
-    segments, entities = await session_counts(db, session.id)
+    segments, entities, max_duration = await session_counts(db, session.id)
     note = await get_note(db, session.id)
     speakers = await list_speakers(db, session.id)
+    duration = max_duration if max_duration > 0 else session_duration(session)
     return SessionOut(
         id=str(session.id),
         reference=session.reference,
@@ -147,7 +156,7 @@ async def serialize_session(db: AsyncSession, session: SessionModel) -> SessionO
         created_at=session.created_at,
         updated_at=session.updated_at,
         last_error=session.last_error,
-        duration_seconds=round(session_duration(session), 2),
+        duration_seconds=round(duration, 2),
         segment_count=segments,
         entity_count=entities,
         note_status=note.status.value if note else None,
@@ -157,8 +166,9 @@ async def serialize_session(db: AsyncSession, session: SessionModel) -> SessionO
 
 
 async def serialize_summary(db: AsyncSession, session: SessionModel) -> SessionSummary:
-    segments, entities = await session_counts(db, session.id)
+    segments, entities, max_duration = await session_counts(db, session.id)
     note = await get_note(db, session.id)
+    duration = max_duration if max_duration > 0 else session_duration(session)
     return SessionSummary(
         id=str(session.id),
         reference=session.reference,
@@ -170,7 +180,7 @@ async def serialize_summary(db: AsyncSession, session: SessionModel) -> SessionS
         created_at=session.created_at,
         started_at=session.started_at,
         ended_at=session.ended_at,
-        duration_seconds=round(session_duration(session), 2),
+        duration_seconds=round(duration, 2),
         segment_count=segments,
         entity_count=entities,
         note_status=note.status.value if note else None,
@@ -494,7 +504,7 @@ async def get_or_create_user(
     user = result.scalar_one_or_none()
     if user is not None:
         return user
-    user = User(email=email, full_name=full_name or email.split("@")[0].replace(".", " ").title(), role=role)
+    user = User(email=email, full_name=full_name or email.split("@")[0].replace(".", " ").title(), role=role, password_hash="")
     db.add(user)
     await db.flush()
     return user

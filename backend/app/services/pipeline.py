@@ -67,7 +67,6 @@ logger = get_logger(__name__)
 
 ENTITY_GROUP_BY_TYPE: dict[EntityType, str] = {
     EntityType.MEDICATION: "medications",
-    EntityType.ALLERGY: "allergies",
     EntityType.SYMPTOM: "symptoms",
     EntityType.FINDING: "findings",
     EntityType.INVESTIGATION: "investigations",
@@ -348,6 +347,13 @@ class SessionPipeline:
         asr_segments = await self._transcribe(runtime, frame)
         if not asr_segments:
             return []
+
+        # Publish ASR segments as hints for text-based diarization providers
+        frame.hints['asr_segments'] = [
+            {'text': seg.text, 'start_time': seg.start_time, 'end_time': seg.end_time, 'confidence': seg.confidence}
+            for seg in asr_segments
+        ]
+
         turns = await self._diarize(runtime, frame)
 
         return await self._assemble_and_store(runtime, frame, asr_segments, turns, chunk_id)
@@ -416,6 +422,26 @@ class SessionPipeline:
             )
             if not assembled:
                 return []
+
+            # Fallback: if audio diarization detected only 1 speaker,
+            # use Gemini text analysis to split by conversational role.
+            unique_speakers = {seg.speaker_label for seg in assembled}
+            if len(unique_speakers) <= 1 and len(assembled) >= 2 and settings.gemini_configured:
+                await self._emit_stage(
+                    runtime, ProcessingStage.ROLE_ATTRIBUTION, "Splitting speakers by conversation",
+                )
+                from app.services.diarization.text_splitter import GeminiTextSplitter  # noqa: PLC0415
+                splitter = GeminiTextSplitter()
+                splits = await splitter.split([
+                    {"ref": seg.ref, "text": seg.text} for seg in assembled
+                ])
+                if splits:
+                    for seg in assembled:
+                        role = splits.get(seg.ref)
+                        if role == "doctor":
+                            seg.speaker_label = "speaker_0"
+                        elif role == "patient":
+                            seg.speaker_label = "speaker_1"
 
             stored: list[TranscriptSegment] = []
             speaker_updates: list[dict[str, Any]] = []

@@ -55,6 +55,7 @@ _PROMPT = """You are a clinical speech recognition engine.
 
 Transcribe the audio VERBATIM. Rules:
 - Write only words that are actually spoken in this audio.
+- Accurately recognize and transcribe any spoken language or code-switching (e.g. English, Tamil, Hindi, Tanglish, Spanish, French, etc.) in its authentic spoken words.
 - Do NOT invent, complete, summarise or clinically "improve" anything.
 - Separate the audio into turns, one per continuous stretch of a single voice.
 - Label voices as speaker_0, speaker_1, ... in the order they first speak. Use
@@ -213,6 +214,7 @@ class GeminiASRProvider(ASRProvider):
                 )
             except Exception as exc:  # noqa: BLE001 - provider errors are re-raised below
                 last_error = exc
+                self._client = None  # Re-establish fresh connection pool on next attempt
                 if not self._retryable(exc):
                     break
                 logger.warning(
@@ -241,7 +243,29 @@ class GeminiASRProvider(ASRProvider):
             return False
         return any(
             token in message
-            for token in ("timeout", "temporarily", "unavailable", "overloaded", "high demand", "503", "500", "429")
+            for token in (
+                "timeout",
+                "temporarily",
+                "unavailable",
+                "overloaded",
+                "high demand",
+                "503",
+                "500",
+                "502",
+                "504",
+                "429",
+                "10054",
+                "connection was forcibly closed",
+                "forcibly closed",
+                "remotedisconnected",
+                "connection reset",
+                "connection error",
+                "socket",
+                "broken pipe",
+                "network",
+                "transport",
+                "protocol",
+            )
         )
 
     def _generate(self, payload: bytes, mime_type: str) -> str:

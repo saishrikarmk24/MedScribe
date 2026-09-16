@@ -10,8 +10,9 @@ import { speakers } from './fixtures'
 describe('SpeakerRoster', () => {
   it('shows the diarized label and the auto-assigned role', () => {
     render(<SpeakerRoster speakers={speakers} />)
-    expect(screen.getByText('speaker_0')).toBeInTheDocument()
-    expect(screen.getByText('Auto 93%')).toBeInTheDocument()
+    expect(screen.getByText('Speaker 1')).toBeInTheDocument()
+    expect(screen.getByText('Detected Doctor')).toBeInTheDocument()
+    expect(screen.getByText('Detected Patient')).toBeInTheDocument()
   })
 
   it('sends a human role override to the backend', async () => {

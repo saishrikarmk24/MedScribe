@@ -35,29 +35,29 @@
 
 @layer components {
   .panel {
-    @apply flex min-h-0 flex-col border border-navy-200/70 bg-white shadow-panel;
+    @apply flex min-h-0 flex-col border border-navy-200/70 dark:border-slate-800 bg-white dark:bg-slate-900/90 shadow-panel text-slate-900 dark:text-slate-100;
   }
 
   .panel-header {
-    @apply flex items-center justify-between gap-2 border-b border-navy-200/70 bg-navy-50/60 px-3 py-2;
+    @apply flex items-center justify-between gap-2 border-b border-navy-200/70 dark:border-slate-800 bg-navy-50/60 dark:bg-slate-950/60 px-3 py-2;
   }
 
   .panel-title {
-    @apply flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-navy-600;
+    @apply flex items-center gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-navy-600 dark:text-slate-300;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-1.5 rounded border text-xs font-medium transition
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl border text-xs font-medium transition
       disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2
       focus-visible:ring-teal-500/50 px-3 py-1.5;
   }
 
   .btn-primary {
-    @apply btn border-navy-800 bg-navy-800 text-white hover:bg-navy-700;
+    @apply btn border-navy-800 bg-navy-800 text-white hover:bg-navy-700 dark:border-teal-500 dark:bg-teal-500 dark:hover:bg-teal-400 dark:text-slate-950 dark:font-bold;
   }
 
   .btn-secondary {
-    @apply btn border-navy-300 bg-white text-navy-700 hover:bg-navy-50;
+    @apply btn border-navy-300 bg-white text-navy-700 hover:bg-navy-50 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-700/80;
   }
 
   .btn-danger {
@@ -65,16 +65,17 @@
   }
 
   .btn-teal {
-    @apply btn border-teal-600 bg-teal-600 text-white hover:bg-teal-700;
+    @apply btn border-teal-600 bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400 dark:font-bold;
   }
 
   .field-label {
-    @apply mb-1 block text-2xs font-semibold uppercase tracking-[0.12em] text-navy-600;
+    @apply mb-1 block text-2xs font-semibold uppercase tracking-[0.12em] text-navy-600 dark:text-slate-400;
   }
 
   .field-input {
-    @apply w-full rounded border border-navy-200 bg-white px-3 py-2 text-sm text-navy-900
-      placeholder:text-navy-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20;
+    @apply w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy-900
+      placeholder:text-navy-300 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20
+      dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500;
   }
 
   .badge {
@@ -83,5 +84,25 @@
 
   .mono {
     @apply font-mono tabular-nums;
+  }
+
+  .interactive-card {
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.99];
+  }
+
+  .shimmer-skeleton {
+    background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+  }
+
+  .shimmer-skeleton-dark {
+    background: linear-gradient(90deg, #1e293b 0%, #334155 50%, #1e293b 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.8s infinite;
+  }
+
+  .pulse-glow {
+    animation: glow-pulse 2.2s ease-in-out infinite;
   }
 }

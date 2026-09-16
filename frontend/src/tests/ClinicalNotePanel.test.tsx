@@ -10,13 +10,13 @@ describe('ClinicalNotePanel', () => {
   it('renders every clinical section with provenance affordances', () => {
     render(<ClinicalNotePanel note={note} changedSections={[]} onShowSource={() => {}} />)
 
-    expect(screen.getByText('Chief Complaint')).toBeInTheDocument()
+    expect(screen.getByText('Presenting Complaint')).toBeInTheDocument()
     expect(screen.getByText('History of Present Illness')).toBeInTheDocument()
-    expect(screen.getByText('Assessment')).toBeInTheDocument()
+    expect(screen.getByText('Assessment and Plan')).toBeInTheDocument()
     expect(screen.getByText('Chest discomfort since yesterday evening.')).toBeInTheDocument()
-    expect(screen.getByText('AI Draft')).toBeInTheDocument()
-    expect(screen.getByLabelText('Show source for Chief Complaint')).toHaveTextContent('Show Source (1)')
-    expect(screen.getByLabelText('Show source for Assessment')).toHaveTextContent('Show Source (0)')
+    expect(screen.getByText('Draft Note')).toBeInTheDocument()
+    expect(screen.getByLabelText('Show source for Presenting Complaint')).toHaveTextContent('Sources (1)')
+    expect(screen.getByLabelText('Show source for Assessment and Plan')).toHaveTextContent('Sources (0)')
   })
 
   it('surfaces negated symptoms without presenting them as present', () => {
@@ -28,7 +28,7 @@ describe('ClinicalNotePanel', () => {
   it('opens the evidence viewer for the clicked section', async () => {
     const onShowSource = vi.fn()
     render(<ClinicalNotePanel note={note} changedSections={[]} onShowSource={onShowSource} />)
-    await userEvent.click(screen.getByLabelText('Show source for Chief Complaint'))
+    await userEvent.click(screen.getByLabelText('Show source for Presenting Complaint'))
     expect(onShowSource).toHaveBeenCalledWith('chief_complaint', 'Chest discomfort since yesterday evening.')
   })
 
@@ -45,7 +45,7 @@ describe('ClinicalNotePanel', () => {
     )
 
     await userEvent.click(screen.getAllByText('Edit')[0])
-    const textarea = screen.getByLabelText('Edit Chief Complaint')
+    const textarea = screen.getByLabelText('Edit Presenting Complaint')
     await userEvent.clear(textarea)
     await userEvent.type(textarea, 'Chest discomfort since yesterday evening, pressure-like.')
     await userEvent.click(screen.getByText('Save'))

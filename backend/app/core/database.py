@@ -123,9 +123,36 @@ async def init_database(create_schema: bool | None = None, url: str | None = Non
 
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+        # Handle lightweight SQLite schema migrations for new columns
+        if engine.dialect.name == "sqlite":
+            await _migrate_sqlite_schema(engine)
+
         logger.info("schema_ready", extra={"dialect": db_state.dialect})
 
     return db_state
+
+
+async def _migrate_sqlite_schema(engine: AsyncEngine) -> None:
+    """Ensure newly added columns exist in existing SQLite database files."""
+    async with engine.begin() as conn:
+        result = await conn.execute(text("PRAGMA table_info(users)"))
+        existing_cols = {row[1] for row in result.fetchall()}
+        if existing_cols:
+            migrations = [
+                ("doctor_id", "ALTER TABLE users ADD COLUMN doctor_id VARCHAR(64)"),
+                ("department", "ALTER TABLE users ADD COLUMN department VARCHAR(128)"),
+                ("password_hash", "ALTER TABLE users ADD COLUMN password_hash VARCHAR(256)"),
+                ("created_by", "ALTER TABLE users ADD COLUMN created_by VARCHAR(128)"),
+                ("last_login_at", "ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP"),
+            ]
+            for col_name, sql in migrations:
+                if col_name not in existing_cols:
+                    try:
+                        await conn.execute(text(sql))
+                        logger.info("sqlite_column_added", extra={"column": col_name})
+                    except Exception as exc:
+                        logger.warning("sqlite_migration_skipped", extra={"column": col_name, "error": str(exc)})
 
 
 async def dispose_database() -> None:

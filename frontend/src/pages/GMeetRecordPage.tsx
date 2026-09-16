@@ -311,11 +311,9 @@ export function GMeetRecordPage() {
               <div className="flex min-h-0 flex-col gap-2">
                 <IntelligencePanel
                   entities={entities}
-                  evidence={evidence}
                   stage={stage}
                   stageDetail={stageDetail}
                   onShowSource={(targetKey, statement) => focusEvidence({ targetKey, statement, kind: 'ENTITY' })}
-                  onHighlight={selectSegment}
                 />
                 <SpeakerRoster speakers={speakers} onChanged={() => void refresh()} />
               </div>

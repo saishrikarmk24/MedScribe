@@ -11,7 +11,15 @@ export type SessionStatus =
 
 export type SessionMode = 'DEMO' | 'MICROPHONE' | 'UPLOAD'
 export type AudioSource = 'MICROPHONE' | 'UPLOAD' | 'SIMULATION'
-export type EncounterType = 'OSCE' | 'WARD_ROUND' | 'OUTPATIENT' | 'EMERGENCY' | 'TEACHING' | 'OTHER'
+export type EncounterType =
+  | 'OSCE'
+  | 'WARD_ROUND'
+  | 'OUTPATIENT'
+  | 'EMERGENCY'
+  | 'TEACHING'
+  | 'MEETING'
+  | 'MDT'
+  | 'OTHER'
 
 export type SpeakerRole = 'DOCTOR' | 'PATIENT' | 'NURSE' | 'STAFF' | 'BACKGROUND' | 'UNKNOWN'
 
@@ -39,11 +47,19 @@ export type NoteSectionKey =
   | 'chief_complaint'
   | 'history_of_present_illness'
   | 'relevant_medical_history'
+  | 'social_history'
+  | 'family_history'
+  | 'menstrual_history'
+  | 'physical_examination'
+  | 'current_medication'
+  | 'allergies'
+  | 'treatment_history'
+  | 'previous_investigation'
   | 'assessment'
   | 'plan'
   | 'follow_up'
 
-export type EntityGroupKey = 'medications' | 'allergies' | 'symptoms' | 'findings' | 'investigations'
+export type EntityGroupKey = 'medications' | 'symptoms' | 'findings' | 'investigations'
 
 export type ProcessingStage =
   | 'AUDIO_CAPTURE'
@@ -329,3 +345,31 @@ export interface Page<T> {
   limit: number
   offset: number
 }
+
+export interface AuthUser {
+  id: string
+  email: string
+  full_name: string
+  doctor_id?: string | null
+  department?: string | null
+  role: 'ADMIN' | 'DOCTOR' | 'FACULTY' | 'STUDENT'
+  is_active: boolean
+  created_at?: string | null
+  last_login_at?: string | null
+}
+
+export interface AuthResponse {
+  token: string
+  token_type: string
+  expires_in_hours: number
+  user: AuthUser
+}
+
+export interface DoctorCreatePayload {
+  doctor_id: string
+  full_name: string
+  email: string
+  department: string
+  password: string
+}
+

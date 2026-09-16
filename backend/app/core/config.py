@@ -32,6 +32,7 @@ class DiarizationProviderName(str, Enum):
     GEMINI = "gemini"
     LOCAL = "local"
     PYANNOTE = "pyannote"
+    CONVERSATIONAL = "conversational"
     MOCK = "mock"
 
 
@@ -44,7 +45,7 @@ class Settings(BaseSettings):
     )
 
     # --- application -------------------------------------------------------
-    app_name: str = "MedScribe Live"
+    app_name: str = "VoiceScribe AI"
     app_version: str = "0.1.0"
     environment: str = "development"
     log_level: str = "INFO"
@@ -77,7 +78,7 @@ class Settings(BaseSettings):
     # --- pipeline providers ------------------------------------------------
     asr_provider: ASRProviderName = ASRProviderName.FASTER_WHISPER
     diarization_provider: DiarizationProviderName = DiarizationProviderName.LOCAL
-    faster_whisper_model: str = "small.en"
+    faster_whisper_model: str = "small"
     pyannote_model: str = "pyannote/speaker-diarization-3.1"
     huggingface_token: str | None = None
 

@@ -32,6 +32,8 @@ class SimulationType(StrEnum):
     OUTPATIENT = "OUTPATIENT"
     EMERGENCY = "EMERGENCY"
     TEACHING = "TEACHING"
+    MEETING = "MEETING"
+    MDT = "MDT"
     OTHER = "OTHER"
 
 
@@ -81,6 +83,14 @@ class NoteSectionKey(StrEnum):
     CHIEF_COMPLAINT = "chief_complaint"
     HISTORY_OF_PRESENT_ILLNESS = "history_of_present_illness"
     RELEVANT_MEDICAL_HISTORY = "relevant_medical_history"
+    SOCIAL_HISTORY = "social_history"
+    FAMILY_HISTORY = "family_history"
+    MENSTRUAL_HISTORY = "menstrual_history"
+    PHYSICAL_EXAMINATION = "physical_examination"
+    CURRENT_MEDICATION = "current_medication"
+    ALLERGIES = "allergies"
+    TREATMENT_HISTORY = "treatment_history"
+    PREVIOUS_INVESTIGATION = "previous_investigation"
     ASSESSMENT = "assessment"
     PLAN = "plan"
     FOLLOW_UP = "follow_up"

@@ -34,8 +34,16 @@ def build_diarization_provider(audio_source: AudioSource | None = None) -> Diari
             provider._load()
             return provider
         except PyannoteUnavailable as exc:  # pragma: no cover - optional dependency
-            logger.warning("diarization_provider_unavailable", extra={"error": str(exc)})
+            logger.warning(
+                "pyannote_unavailable_falling_back_to_local", 
+                extra={"error": str(exc), "message": "Pyannote is not available. Using local diarization fallback."}
+            )
             return LocalDiarizationProvider()
+
+    if settings.diarization_provider is DiarizationProviderName.CONVERSATIONAL:
+        from app.services.diarization.conversational_provider import ConversationalDiarizationProvider
+
+        return ConversationalDiarizationProvider()
 
     if settings.diarization_provider is DiarizationProviderName.GEMINI:
         from app.services.diarization.gemini_provider import GeminiDiarizationProvider

@@ -22,6 +22,14 @@ SECTION_KEYS: tuple[str, ...] = (
     "chief_complaint",
     "history_of_present_illness",
     "relevant_medical_history",
+    "social_history",
+    "family_history",
+    "menstrual_history",
+    "physical_examination",
+    "current_medication",
+    "allergies",
+    "treatment_history",
+    "previous_investigation",
     "assessment",
     "plan",
     "follow_up",
@@ -29,18 +37,25 @@ SECTION_KEYS: tuple[str, ...] = (
 
 ENTITY_KEYS: tuple[str, ...] = (
     "medications",
-    "allergies",
     "symptoms",
     "findings",
     "investigations",
 )
 
 SECTION_LABELS: dict[str, str] = {
-    "chief_complaint": "Chief Complaint",
+    "chief_complaint": "Presenting Complaint",
     "history_of_present_illness": "History of Present Illness",
-    "relevant_medical_history": "Relevant Medical History",
-    "assessment": "Assessment",
-    "plan": "Plan",
+    "relevant_medical_history": "Past History",
+    "social_history": "Social History",
+    "family_history": "Family History",
+    "menstrual_history": "Menstrual History",
+    "physical_examination": "Physical Examination",
+    "current_medication": "Current Medication",
+    "allergies": "Allergies",
+    "treatment_history": "Treatment History",
+    "previous_investigation": "Previous Investigation",
+    "assessment": "Assessment and Plan",
+    "plan": "Plan Of Care",
     "follow_up": "Follow-up",
 }
 
@@ -106,9 +121,16 @@ class ClinicalNoteContent(BaseModel):
     chief_complaint: ClinicalSection = Field(default_factory=ClinicalSection)
     history_of_present_illness: ClinicalSection = Field(default_factory=ClinicalSection)
     relevant_medical_history: ClinicalSection = Field(default_factory=ClinicalSection)
+    social_history: ClinicalSection = Field(default_factory=ClinicalSection)
+    family_history: ClinicalSection = Field(default_factory=ClinicalSection)
+    menstrual_history: ClinicalSection = Field(default_factory=ClinicalSection)
+    physical_examination: ClinicalSection = Field(default_factory=ClinicalSection)
+    current_medication: ClinicalSection = Field(default_factory=ClinicalSection)
+    allergies: ClinicalSection = Field(default_factory=ClinicalSection)
+    treatment_history: ClinicalSection = Field(default_factory=ClinicalSection)
+    previous_investigation: ClinicalSection = Field(default_factory=ClinicalSection)
 
     medications: list[ClinicalEntityOut] = Field(default_factory=list)
-    allergies: list[ClinicalEntityOut] = Field(default_factory=list)
     symptoms: list[ClinicalEntityOut] = Field(default_factory=list)
     findings: list[ClinicalEntityOut] = Field(default_factory=list)
     investigations: list[ClinicalEntityOut] = Field(default_factory=list)
@@ -122,10 +144,10 @@ class ClinicalNoteContent(BaseModel):
     version: int = 0
 
     def sections(self) -> dict[str, ClinicalSection]:
-        return {key: getattr(self, key) for key in SECTION_KEYS}
+        return {key: getattr(self, key) for key in SECTION_KEYS if hasattr(self, key)}
 
     def entity_groups(self) -> dict[str, list[ClinicalEntityOut]]:
-        return {key: getattr(self, key) for key in ENTITY_KEYS}
+        return {key: getattr(self, key) for key in ENTITY_KEYS if hasattr(self, key)}
 
 
 class NoteOut(BaseModel):
@@ -168,6 +190,14 @@ class NotePatch(BaseModel):
     chief_complaint: str | None = None
     history_of_present_illness: str | None = None
     relevant_medical_history: str | None = None
+    social_history: str | None = None
+    family_history: str | None = None
+    menstrual_history: str | None = None
+    physical_examination: str | None = None
+    current_medication: str | None = None
+    allergies: str | None = None
+    treatment_history: str | None = None
+    previous_investigation: str | None = None
     assessment: str | None = None
     plan: str | None = None
     follow_up: str | None = None

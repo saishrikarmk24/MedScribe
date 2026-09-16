@@ -1,7 +1,6 @@
-import { CircleStop, Cpu, Mic, MicOff, Pause, Play, Plug, RefreshCw, Wifi, WifiOff } from 'lucide-react'
+import { CircleStop, Cpu, Mic, MicOff, Pause, Play, RefreshCw, Wifi, WifiOff } from 'lucide-react'
 
 import { StatusDot } from '@/components/ui/primitives'
-import { SESSION_STATUS_STYLES } from '@/constants'
 import type { ConnectionState } from '@/services/socket'
 import type { AiStatus, Session } from '@/types'
 import { cn } from '@/utils/cn'
@@ -39,80 +38,86 @@ export function SessionBar({
   const canEnd = ['LIVE', 'PAUSED', 'PROCESSING'].includes(session.status)
 
   const aiLabel = !ai
-    ? 'AI idle'
+    ? 'AI Scribe: Ready'
     : ai.mock
-      ? 'Rule-based note'
-      : ai.provider === 'gemini'
-        ? `Gemini · ${ai.model}`
-        : 'AI connected'
-  const aiOk = Boolean(ai && !ai.degraded && !ai.mock)
+      ? 'AI Scribe: Local Demo'
+      : ai.degraded
+        ? 'AI Scribe: Degraded'
+        : 'AI Scribe: Active'
+  const aiOk = Boolean(ai && !ai.degraded)
 
   return (
-    <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-navy-200 bg-navy-950 px-4 py-2.5 text-white">
-      <div className="flex items-center gap-2">
+    <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-800 bg-slate-950 px-4 py-2.5 text-white shadow-sm">
+      <div className="flex items-center gap-3">
         <span
           className={cn(
-            'badge border-transparent',
-            isLive ? 'bg-rose-500/20 text-rose-200' : 'bg-white/10 text-navy-200',
+            'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-2xs font-semibold uppercase tracking-wider',
+            isLive
+              ? 'bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40'
+              : isPaused
+                ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/40'
+                : 'bg-slate-800 text-slate-300',
           )}
         >
-          <StatusDot className={isLive ? 'bg-rose-400' : 'bg-navy-400'} pulse={isLive} />
+          <StatusDot className={isLive ? 'bg-rose-400' : isPaused ? 'bg-amber-400' : 'bg-slate-400'} pulse={isLive} />
           {session.status}
         </span>
         <div className="leading-tight">
-          <p className="mono text-xs font-semibold text-white">{session.reference}</p>
-          <p className="max-w-[16rem] truncate text-2xs text-navy-400">{session.name}</p>
+          <div className="flex items-center gap-2">
+            <span className="mono text-xs font-bold text-white">{session.reference}</span>
+            <span className="text-2xs text-slate-500">·</span>
+            <span className="text-xs font-medium text-slate-300">Pt. {session.patient_id}</span>
+          </div>
+          <p className="max-w-[16rem] truncate text-2xs text-slate-400">{session.name}</p>
         </div>
       </div>
 
-      <p className="mono text-xl font-semibold tabular-nums tracking-tight text-white" aria-label="Session timer">
-        {formatTimestamp(elapsed)}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="mono text-2xl font-bold tabular-nums tracking-tight text-white" aria-label="Session timer">
+          {formatTimestamp(elapsed)}
+        </p>
+      </div>
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-navy-300">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-slate-300">
         <span className="flex items-center gap-1.5" title={`Audio source: ${audioLabel}`}>
           {audioActive ? (
-            <Mic className="h-3.5 w-3.5 text-teal-300" aria-hidden />
+            <Mic className="h-3.5 w-3.5 text-teal-400 animate-pulse" aria-hidden />
           ) : (
-            <MicOff className="h-3.5 w-3.5 text-navy-400" aria-hidden />
+            <MicOff className="h-3.5 w-3.5 text-slate-500" aria-hidden />
           )}
-          {audioLabel}
+          <span>{audioActive ? 'Mic Active' : 'Mic Idle'}</span>
         </span>
         <span className="flex items-center gap-1.5" title={aiLabel}>
-          <Cpu className={cn('h-3.5 w-3.5', aiOk ? 'text-teal-300' : 'text-amber-300')} aria-hidden />
+          <Cpu className={cn('h-3.5 w-3.5', aiOk ? 'text-teal-400' : 'text-amber-400')} aria-hidden />
           {aiLabel}
         </span>
         <span className="flex items-center gap-1.5">
           {connection === 'open' ? (
-            <Wifi className="h-3.5 w-3.5 text-teal-300" aria-hidden />
+            <Wifi className="h-3.5 w-3.5 text-teal-400" aria-hidden />
           ) : (
-            <WifiOff className="h-3.5 w-3.5 text-amber-300" aria-hidden />
+            <WifiOff className="h-3.5 w-3.5 text-amber-400" aria-hidden />
           )}
-          {connection === 'open' ? 'Connected' : connection === 'reconnecting' ? 'Reconnecting…' : connection}
-        </span>
-        <span className={cn('badge border-transparent bg-white/10', SESSION_STATUS_STYLES[session.status] && 'text-navy-100')}>
-          <Plug className="h-3 w-3" aria-hidden />
-          {session.mode}
+          {connection === 'open' ? 'Live Synced' : connection === 'reconnecting' ? 'Reconnecting…' : connection}
         </span>
       </div>
 
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={onRetryAi}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2.5 py-1.5 text-xs font-medium text-navy-100 hover:bg-white/10 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-white/10 disabled:opacity-50 transition"
           title="Force a clinical structuring pass now"
         >
           <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-          Run AI update
+          Refresh Note
         </button>
         {isLive ? (
           <button
             type="button"
             onClick={onPause}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded border border-white/20 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/20 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50 transition"
           >
             <Pause className="h-3.5 w-3.5" aria-hidden />
             Pause
@@ -123,7 +128,7 @@ export function SessionBar({
             type="button"
             onClick={onResume}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded border border-teal-500 bg-teal-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-teal-500 bg-teal-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-teal-500 disabled:opacity-50 transition"
           >
             <Play className="h-3.5 w-3.5" aria-hidden />
             Resume
@@ -133,10 +138,10 @@ export function SessionBar({
           type="button"
           onClick={onStop}
           disabled={busy || !canEnd}
-          className="inline-flex items-center gap-1.5 rounded border border-rose-500 bg-rose-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-rose-500 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rose-600 bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-500 disabled:opacity-50 transition"
         >
           <CircleStop className="h-3.5 w-3.5" aria-hidden />
-          End Session
+          End Encounter & Review
         </button>
       </div>
     </header>

@@ -97,7 +97,7 @@ async function start(includeMicrophone) {
       micGain.connect(mixer)
       sources.push(mic, micGain)
       micActive = true
-      port.postMessage({ event: 'micStatus', active: true, error: null })
+      sendPortMessage({ event: 'micStatus', active: true, error: null })
     } catch (micError) {
       // Surface the error to the UI instead of silently swallowing it
       const reason = micError.name === 'NotAllowedError'
@@ -105,7 +105,7 @@ async function start(includeMicrophone) {
         : micError.name === 'NotFoundError'
           ? 'No microphone found on this computer. Only Meet tab audio will be recorded.'
           : `Microphone error: ${micError.message}. Only Meet tab audio will be recorded.`
-      port.postMessage({ event: 'micStatus', active: false, error: reason })
+      sendPortMessage({ event: 'micStatus', active: false, error: reason })
     }
   }
 
@@ -124,7 +124,7 @@ async function start(includeMicrophone) {
     if (Date.now() - lastLevelAt > 120) {
       let peak = 0
       for (let i = 0; i < data.length; i += 12) peak = Math.max(peak, Math.abs(data[i]))
-      port.postMessage({ event: 'level', level: peak })
+      sendPortMessage({ event: 'level', level: peak })
       lastLevelAt = Date.now()
     }
   }
@@ -133,13 +133,28 @@ async function start(includeMicrophone) {
   return { ok: true, micActive }
 }
 
+async function isReady() {
+  const isHealthy = Boolean(
+    tabStream &&
+    tabStream.active &&
+    tabStream.getAudioTracks().some((t) => t.readyState === 'live') &&
+    context &&
+    context.state !== 'closed'
+  )
+  return { ok: true, ready: isHealthy, recording }
+}
+
 async function stopAndUpload(sessionId, apiBase) {
   if (!recording) throw new Error('No active recording to stop.')
   recording = false
-  processor.onaudioprocess = null
-  processor.disconnect()
-  sink.disconnect()
-  port.postMessage({ event: 'level', level: 0 })
+  if (processor) {
+    processor.onaudioprocess = null
+    try { processor.disconnect() } catch {}
+  }
+  if (sink) {
+    try { sink.disconnect() } catch {}
+  }
+  sendPortMessage({ event: 'level', level: 0 })
   const merged = new Float32Array(samples)
   let offset = 0
   chunks.forEach((chunk) => { merged.set(chunk, offset); offset += chunk.length })
@@ -150,23 +165,78 @@ async function stopAndUpload(sessionId, apiBase) {
   const audio = downsample(merged, sampleRate, 16000)
   const form = new FormData()
   form.append('file', new File([encodeWav(audio, 16000)], `gmeet-${Date.now()}.wav`, { type: 'audio/wav' }))
-  const response = await fetch(`${apiBase.replace(/\/$/, '')}/sessions/${sessionId}/audio/upload`, { method: 'POST', body: form })
+
+  const uploadEndpoint = `${apiBase.replace(/\/$/, '')}/sessions/${sessionId}/audio/upload`
+  let response
+  try {
+    response = await fetch(uploadEndpoint, { method: 'POST', body: form })
+  } catch (fetchErr) {
+    const altBase = apiBase.includes('127.0.0.1')
+      ? apiBase.replace('127.0.0.1', 'localhost')
+      : apiBase.includes('localhost')
+        ? apiBase.replace('localhost', '127.0.0.1')
+        : null
+    if (altBase) {
+      response = await fetch(`${altBase.replace(/\/$/, '')}/sessions/${sessionId}/audio/upload`, { method: 'POST', body: form })
+    } else {
+      throw new Error(`Failed to upload audio to backend at ${uploadEndpoint}: ${fetchErr.message}`)
+    }
+  }
   const body = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(body.detail || `${response.status} ${response.statusText}`)
   return { ok: true, transcribed: body.ok, message: body.message }
 }
 
-const port = chrome.runtime.connect({ name: 'medscribe-recorder' })
-port.onMessage.addListener((message) => {
+// ── Persistent Port with Automatic Reconnection ──────────────────────
+let port = null
+let reconnectTimer = null
+
+function sendPortMessage(payload) {
+  if (port) {
+    try {
+      port.postMessage(payload)
+      return
+    } catch {
+      port = null
+    }
+  }
+}
+
+function handleMessage(message) {
   const handlers = {
     prepare: () => prepare(message.streamId),
+    release: async () => { release(); return { ok: true } },
+    isReady: () => isReady(),
     start: () => start(message.includeMicrophone),
     stopAndUpload: () => stopAndUpload(message.sessionId, message.apiBase),
     discard: async () => { chunks = []; samples = 0; return { ok: true } },
+    ping: async () => ({ ok: true }),
   }
   const handler = handlers[message.type]
   if (!handler) return
   handler()
-    .then((result) => port.postMessage({ requestId: message.requestId, result }))
-    .catch((error) => port.postMessage({ requestId: message.requestId, result: { ok: false, error: error.message || String(error) } }))
-})
+    .then((result) => sendPortMessage({ requestId: message.requestId, result }))
+    .catch((error) => sendPortMessage({ requestId: message.requestId, result: { ok: false, error: error.message || String(error) } }))
+}
+
+function connectPort() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+  try {
+    port = chrome.runtime.connect({ name: 'medscribe-recorder' })
+    port.onMessage.addListener(handleMessage)
+    port.onDisconnect.addListener(() => {
+      port = null
+      // When Chrome background service worker goes to sleep or restarts,
+      // reconnect automatically so the offscreen document remains available.
+      reconnectTimer = setTimeout(connectPort, 500)
+    })
+  } catch {
+    port = null
+    reconnectTimer = setTimeout(connectPort, 1000)
+  }
+}
+
+connectPort()

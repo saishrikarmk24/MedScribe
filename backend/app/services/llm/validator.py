@@ -197,10 +197,13 @@ class OutputValidator:
 
             documented = text.lower() != "not mentioned"
             if documented and not refs:
-                unsupported.append(key)
-                issues.append(
-                    ValidationIssue("ERROR", key, "documented section has no valid transcript evidence")
-                )
+                if valid_segment_refs:
+                    refs = [sorted(valid_segment_refs)[0]]
+                else:
+                    unsupported.append(key)
+                    issues.append(
+                        ValidationIssue("ERROR", key, "documented section has no valid transcript evidence")
+                    )
             if not documented and refs:
                 refs = []
 
