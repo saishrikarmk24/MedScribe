@@ -59,6 +59,8 @@ export function LiveSessionPage() {
 
   const navigate = useNavigate()
   const forwardedRef = useRef(false)
+  const wasRecordingRef = useRef(false)
+  const [hasStoppedRecording, setHasStoppedRecording] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [noteTab, setNoteTab] = useState<'draft' | 'final'>('draft')
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false)
@@ -66,6 +68,12 @@ export function LiveSessionPage() {
   const [animateFlow, setAnimateFlow] = useState(false)
 
   const recorder = useAudioRecorder(id ?? null)
+
+  useEffect(() => {
+    if (recorder.recording) {
+      wasRecordingRef.current = true
+    }
+  }, [recorder.recording])
 
   useEffect(() => {
     if (!id) return
@@ -98,6 +106,7 @@ export function LiveSessionPage() {
 
   const handleStopRecording = async () => {
     setAnimateFlow(true)
+    setHasStoppedRecording(true)
     try {
       await recorder.stop()
       await refresh()
@@ -207,7 +216,7 @@ export function LiveSessionPage() {
     recording: recorder.recording,
     processing: isProcessing,
     hasTranscript,
-    hasNote: hasNote || hasNoteContent,
+    hasNote: hasTranscript && hasNote && hasNoteContent,
   })
   const phase: 'capture' | 'processing' | 'report' =
     workspace === 'capture' ? 'capture' : workspace === 'theater' ? 'processing' : 'report'
@@ -222,7 +231,15 @@ export function LiveSessionPage() {
   const entitiesShown = useReveal(sectionsDone ? entities.length : 0, 40, animateFlow)
 
   const flowStep = recorder.recording ? 0 : !hasTranscript ? 1 : isProcessing ? 2 : 3
-  const noteReady = hasNote && !isProcessing && !recorder.recording && recorder.state !== 'uploading'
+  const hasFinishedSession = (hasStoppedRecording || wasRecordingRef.current) && hasTranscript
+  const noteReady = Boolean(
+    hasFinishedSession &&
+    hasNote &&
+    hasNoteContent &&
+    !isProcessing &&
+    !recorder.recording &&
+    recorder.state !== 'uploading'
+  )
 
   useEffect(() => {
     if (noteReady && session?.id && !forwardedRef.current) {

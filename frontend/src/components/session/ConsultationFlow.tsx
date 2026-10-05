@@ -202,7 +202,7 @@ export function liveWorkspaceMode(input: {
   hasNote: boolean
 }): 'capture' | 'theater' | 'workspace' {
   if (input.recording) return 'capture'
-  if (input.hasTranscript || input.hasNote) return 'workspace'
+  if (input.hasTranscript) return 'workspace'
   if (input.processing) return 'theater'
   return 'capture'
 }
