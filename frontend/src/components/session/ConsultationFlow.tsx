@@ -49,18 +49,18 @@ export function FlowStepper({ step, className }: { step: number; className?: str
               <span
                 className={cn(
                   'relative grid h-9 w-9 place-items-center rounded-full transition-all duration-500',
-                  done && 'bg-brand text-brand-fg',
-                  active && 'bg-aqua text-aqua-fg shadow-raised',
+                  done && 'bg-aqua text-aqua-fg shadow-[0_0_14px_rgba(86,214,202,0.45)] dark:bg-aqua dark:text-canvas',
+                  active && 'bg-brand text-brand-fg ring-4 ring-aqua/30 shadow-[0_0_18px_rgba(86,214,202,0.5)]',
                   !done && !active && 'bg-surface-3 text-ink-3',
                 )}
               >
                 {active ? <span className="absolute inset-0 rounded-full bg-aqua animate-ring-out" aria-hidden /> : null}
-                {done ? <Check className="relative h-4 w-4" /> : <Icon className={cn('relative h-4 w-4', active && 'animate-soft-bounce')} />}
+                {done ? <Check className="relative h-4 w-4 stroke-[2.5]" /> : <Icon className={cn('relative h-4 w-4', active && 'animate-soft-bounce')} />}
               </span>
               <span
                 className={cn(
                   'hidden text-xs font-semibold transition-colors sm:inline',
-                  active ? 'text-ink' : done ? 'text-ink-2' : 'text-ink-3',
+                  active ? 'text-ink font-bold' : done ? 'text-ink' : 'text-ink-3',
                 )}
               >
                 {label}
@@ -69,7 +69,7 @@ export function FlowStepper({ step, className }: { step: number; className?: str
             {index < STEPS.length - 1 ? (
               <span className="relative mx-3 h-0.5 flex-1 overflow-hidden rounded-full bg-surface-3" aria-hidden>
                 <span
-                  className="absolute inset-y-0 left-0 rounded-full bg-brand transition-all duration-700"
+                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-aqua to-brand transition-all duration-700 shadow-[0_0_8px_rgba(86,214,202,0.5)]"
                   style={{ width: index < step ? '100%' : '0%' }}
                 />
                 {index === step && !done ? (

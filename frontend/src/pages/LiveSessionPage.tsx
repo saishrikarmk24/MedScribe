@@ -247,21 +247,45 @@ export function LiveSessionPage() {
 
   if (forwarding) {
     return (
-      <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-canvas p-6 text-ink animate-fade-in">
-        <div className="flex flex-col items-center gap-4 text-center px-6 py-8 rounded-card border border-aqua/30 bg-surface shadow-float animate-scale-spring max-w-sm w-full mx-4">
+      <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-canvas p-6 text-ink animate-fade-in">
+        {/* Ambient radial lighting */}
+        <div className="absolute h-96 w-96 rounded-full bg-aqua/15 blur-3xl animate-pulse pointer-events-none" />
+        <div className="absolute h-64 w-64 rounded-full bg-brand/20 blur-2xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center gap-5 text-center px-8 py-9 rounded-card border border-aqua/40 bg-surface/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-2xl animate-scale-spring max-w-md w-full mx-4">
           <div className="relative flex items-center justify-center">
-            <span className="absolute h-16 w-16 rounded-full bg-aqua/20 animate-ping" />
-            <div className="relative grid h-14 w-14 place-items-center rounded-full bg-brand text-brand-fg shadow-card">
-              <CheckCircle2 className="h-7 w-7 text-aqua" />
+            <span className="absolute h-24 w-24 rounded-full border border-aqua/30 animate-ring-out" />
+            <span className="absolute h-24 w-24 rounded-full border border-aqua/20 animate-ring-out [animation-delay:0.75s]" />
+            <div className="relative grid h-16 w-16 place-items-center rounded-full bg-gradient-to-tr from-brand to-aqua text-brand-fg shadow-[0_0_24px_rgba(86,214,202,0.45)]">
+              <CheckCircle2 className="h-8 w-8 text-white drop-shadow-sm" />
             </div>
           </div>
-          <div>
-            <h3 className="text-base font-semibold tracking-tight text-ink">Clinical Note Generated</h3>
-            <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-ink-2">
-              <span>Forwarding to Review &amp; Edit</span>
-              <ArrowRight className="h-3.5 w-3.5 text-brand animate-pulse" />
+
+          <div className="space-y-1.5">
+            <span className="mono text-[10px] font-bold uppercase tracking-wider text-aqua">
+              VoiceScribe Clinical Synthesis
+            </span>
+            <h3 className="text-lg font-bold tracking-tight text-ink">
+              Clinical Documentation Complete
+            </h3>
+            <p className="flex items-center justify-center gap-2 text-xs text-ink-2">
+              <span>Transitioning to Physician Review</span>
+              <ArrowRight className="h-3.5 w-3.5 text-aqua animate-pulse" />
             </p>
           </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-1.5 py-1">
+            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
+              ✓ Audio Diarized
+            </span>
+            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
+              ✓ Clinical NLP
+            </span>
+            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
+              ✓ 100% English SOAP
+            </span>
+          </div>
+
           <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden mt-1 border border-line">
             <div className="h-full bg-gradient-to-r from-brand via-aqua to-brand w-full animate-shimmer rounded-full" />
           </div>

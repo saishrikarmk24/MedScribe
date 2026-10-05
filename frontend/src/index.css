@@ -375,4 +375,40 @@
   .pulse-glow {
     animation: glow-pulse 2.2s ease-in-out infinite;
   }
+
+  /* ---- attractive medical UI enhancements -------------------------------- */
+  .card-glow {
+    @apply transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-aqua/40 hover:shadow-card;
+  }
+
+  .btn-glow {
+    box-shadow: 0 0 16px -2px rgba(86, 214, 202, 0.35);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .btn-glow:hover {
+    box-shadow: 0 0 24px 2px rgba(86, 214, 202, 0.55);
+    transform: translateY(-1px);
+  }
+  .btn-glow:active {
+    transform: translateY(0);
+  }
+
+  .btn-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+    transform: skewX(-20deg);
+  }
+  .btn-shimmer:hover::after {
+    left: 200%;
+    transition: left 0.85s ease-in-out;
+  }
 }

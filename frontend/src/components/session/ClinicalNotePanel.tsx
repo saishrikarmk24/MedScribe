@@ -231,9 +231,19 @@ export function ClinicalNotePanel({
           {documentedSections.map(renderSection)}
 
           {quietSections.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="px-1 pt-1 text-2xs font-semibold text-ink-3">Not discussed in this consultation</p>
-              {quietSections.map(renderSection)}
+            <div className="space-y-2 rounded-tile border border-line/70 bg-surface-2/30 p-3 transition-all duration-200">
+              <div className="flex items-center justify-between px-1">
+                <p className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-wider text-ink-3">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ink-3/40" />
+                  Not discussed in this consultation
+                </p>
+                <span className="chip text-[10px] py-0 px-2 font-mono text-ink-3">
+                  {quietSections.length} optional sections
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {quietSections.map(renderSection)}
+              </div>
             </div>
           ) : null}
 
@@ -359,8 +369,8 @@ function NoteSection({
 
   if (!documented && !editing && !needsReview) {
     return (
-      <article className="flex items-center gap-2 rounded-control border border-line bg-surface-2/60 px-3 py-1.5">
-        <span className="h-3 w-1 shrink-0 rounded-full bg-line-strong" aria-hidden />
+      <article className="flex items-center gap-2 rounded-control border border-line bg-surface px-3 py-1.5 transition-all duration-200 hover:border-aqua/40 hover:bg-surface-2 hover:shadow-2xs">
+        <span className="h-3 w-1 shrink-0 rounded-full bg-line-strong transition-colors" aria-hidden />
         <h3 className="truncate text-xs font-semibold text-ink-2">{label}</h3>
         <span className="hidden truncate text-2xs italic text-ink-3 sm:inline">{NOT_MENTIONED_TEXT}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1">
@@ -377,14 +387,18 @@ function NoteSection({
             type="button"
             onClick={() => onShowSource(sectionKey, draft)}
             aria-label={`Show source for ${label}`}
-            className="btn-ghost btn-sm px-2 py-0.5 text-2xs"
+            className="btn-ghost btn-sm px-2 py-0.5 text-2xs hover:text-brand"
           >
             <Link2 className="h-3 w-3" aria-hidden />
             Sources ({evidenceCount})
           </button>
           {editable ? (
-            <button type="button" onClick={() => setEditing(true)} className="btn-ghost btn-sm px-2 py-0.5 text-2xs">
-              <Pencil className="h-3 w-3 text-ink-3" aria-hidden />
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="btn-secondary btn-sm px-2.5 py-0.5 text-2xs font-medium hover:border-aqua/50 hover:bg-aqua-soft hover:text-brand transition-colors"
+            >
+              <Pencil className="h-3 w-3 text-aqua" aria-hidden />
               Edit
             </button>
           ) : null}
@@ -396,10 +410,10 @@ function NoteSection({
   return (
     <article
       className={cn(
-        'overflow-hidden rounded-tile border bg-surface transition-all duration-150',
+        'overflow-hidden rounded-tile border bg-surface transition-all duration-200 hover:border-line-strong hover:shadow-2xs',
         needsReview
           ? 'border-tone-warning-line ring-1 ring-tone-warning-line'
-          : 'border-line hover:border-line-strong',
+          : 'border-line',
         changed && 'ring-2 ring-aqua/40',
       )}
     >
@@ -512,9 +526,9 @@ function EntityGroup({
   onShowSource: (targetKey: string, statement: string) => void
 }) {
   return (
-    <article className="overflow-hidden rounded-tile border border-line bg-surface">
+    <article className="overflow-hidden rounded-tile border border-line bg-surface transition-all duration-200 hover:border-line-strong hover:shadow-2xs">
       <header className="flex items-center gap-2 px-4 pb-1 pt-3.5 md:px-5">
-        <span className="h-4 w-1 shrink-0 rounded-full bg-lime" aria-hidden />
+        <span className="h-4 w-1 shrink-0 rounded-full bg-aqua shadow-[0_0_8px_rgba(86,214,202,0.4)]" aria-hidden />
         <h3 className="text-sm font-semibold tracking-tight text-ink">{title}</h3>
         <span className="badge tone-neutral mono ml-auto">{entities.length}</span>
       </header>

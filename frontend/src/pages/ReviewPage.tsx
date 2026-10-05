@@ -244,7 +244,7 @@ export function ReviewPage() {
           ) : (
             <button
               type="button"
-              className="btn-primary"
+              className="btn-primary btn-glow btn-shimmer font-semibold"
               disabled={busy || !approvable}
               onClick={() => setShowApproveModal(true)}
               title="Review, approve and sign clinical note"
