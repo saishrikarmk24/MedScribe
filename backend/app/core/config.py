@@ -138,6 +138,7 @@ class Settings(BaseSettings):
     indic_asr_language: str = "code_switching"
     asr_languages: str = "ta,hi,en"
     asr_style_prompts: bool = True
+    asr_task: str = "transcribe"  # "transcribe" for verbatim script or "translate" for direct English speech
     asr_beam_size: int = 2
     # Replaces the built-in style prompts when set. Keep drugs, symptoms and numbers
     # out of it: Whisper copies prompt words into the transcript.

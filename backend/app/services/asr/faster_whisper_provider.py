@@ -292,10 +292,11 @@ class FasterWhisperProvider(ASRProvider):
         prompt = self._prompt_for(language)
         # Tamil / Hindi need a wider beam than English; turbo is otherwise too greedy.
         beam = max(settings.asr_beam_size, 5) if language in ("ta", "hi", "te", "ml") else settings.asr_beam_size
+        task = getattr(settings, "asr_task", "transcribe")
         segments, _info = model.transcribe(
             piece,
             language=language,
-            task="transcribe",
+            task=task,
             beam_size=beam,
             vad_filter=False,
             word_timestamps=True,
