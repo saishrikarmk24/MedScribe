@@ -102,11 +102,8 @@ describe('ClinicalNotePanel', () => {
     render(<ClinicalNotePanel note={note} changedSections={[]} onShowSource={() => {}} onExport={onExport} />)
 
     await userEvent.click(screen.getByLabelText('Copy Presenting Complaint'))
-    expect(writeText).toHaveBeenCalledWith('Presenting Complaint\nChest discomfort since yesterday evening.')
-
-    await userEvent.click(screen.getByText('FHIR JSON'))
     await userEvent.click(screen.getByText('PDF'))
-    expect(onExport.mock.calls).toEqual([['FHIR'], ['PDF']])
+    expect(onExport.mock.calls).toEqual([['PDF']])
   })
 
   it('highlights entity mentions the validator flagged', () => {

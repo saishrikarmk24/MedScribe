@@ -209,7 +209,6 @@ export function ClinicalNotePanel({
               {onExport ? (
                 <>
                   <ExportButton label="PDF" disabled={exportBusy} onClick={() => void onExport('PDF')} />
-                  <ExportButton label="FHIR JSON" disabled={exportBusy} onClick={() => void onExport('FHIR')} />
                 </>
               ) : null}
             </span>
@@ -231,6 +230,13 @@ export function ClinicalNotePanel({
 
           {documentedSections.map(renderSection)}
 
+          {quietSections.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="px-1 pt-1 text-2xs font-semibold text-ink-3">Not discussed in this consultation</p>
+              {quietSections.map(renderSection)}
+            </div>
+          ) : null}
+
           {visibleGroups.map((group) => (
             <EntityGroup
               key={group.groupKey}
@@ -239,13 +245,6 @@ export function ClinicalNotePanel({
               onShowSource={onShowSource}
             />
           ))}
-
-          {quietSections.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="px-1 pt-1 text-2xs font-semibold text-ink-3">Not discussed in this consultation</p>
-              {quietSections.map(renderSection)}
-            </div>
-          ) : null}
 
           {visibleSections.length === 0 && visibleGroups.length === 0 ? (
             <EmptyState title="Nothing documented yet" detail="Sections will automatically appear as discussion topics are mentioned." />
