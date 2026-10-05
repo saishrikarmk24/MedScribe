@@ -525,15 +525,26 @@ def _key(text: str) -> str:
 
 
 def is_prompt_echo(text: str, prompt: str | None) -> bool:
-    """True only when Whisper verbatim repeats the prompt or a substantial chunk of it."""
-    if not prompt or not text:
+    """True when Whisper verbatim repeats the prompt or any style prompt clause."""
+    if not text:
         return False
     cleaned_text = _key(text)
-    cleaned_prompt = _key(prompt)
-    if not cleaned_text or not cleaned_prompt:
+    if not cleaned_text:
         return False
-    if cleaned_text == cleaned_prompt or (len(cleaned_text.split()) >= 6 and cleaned_text in cleaned_prompt):
-        return True
+    candidates: list[str] = [prompt] if prompt else []
+    candidates.extend(_STYLE_PROMPTS.values())
+    for p in candidates:
+        if not p:
+            continue
+        cleaned_prompt = _key(p)
+        if not cleaned_prompt:
+            continue
+        if cleaned_text == cleaned_prompt or (len(cleaned_text.split()) >= 3 and cleaned_text in cleaned_prompt):
+            return True
+        for clause in re.split(r"[।\.\,\?\!]+", p):
+            cleaned_clause = _key(clause)
+            if cleaned_clause and (cleaned_text == cleaned_clause or (len(cleaned_text.split()) >= 2 and cleaned_text in cleaned_clause)):
+                return True
     return False
 
 

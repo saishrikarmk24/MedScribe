@@ -213,10 +213,10 @@ export function LiveSessionPage() {
     if (workspace !== 'capture') setAnimateFlow(true)
   }, [workspace])
 
-  const transcriptShown = useReveal(segments.length, 240, animateFlow)
-  const sectionsShown = useReveal(hasNoteContent ? mentionedSections.length : 0, 420, animateFlow)
+  const transcriptShown = useReveal(segments.length, 60, animateFlow)
+  const sectionsShown = useReveal(hasNoteContent ? mentionedSections.length : 0, 80, animateFlow)
   const sectionsDone = hasNoteContent && sectionsShown >= mentionedSections.length
-  const entitiesShown = useReveal(sectionsDone ? entities.length : 0, 110, animateFlow)
+  const entitiesShown = useReveal(sectionsDone ? entities.length : 0, 40, animateFlow)
 
   const flowStep = !hasTranscript ? 1 : !hasNoteContent ? 2 : 3
   const reportReady = hasNoteContent && !isProcessing

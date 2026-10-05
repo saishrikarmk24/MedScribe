@@ -74,6 +74,10 @@ def test_clean_drops_hallucinations_and_prompt_echo() -> None:
     assert clean_asr_text(prompt, prompt) == ""
     kept = "எனக்கு ரெண்டு நாளா fever இருக்கு"
     assert clean_asr_text(kept, prompt) == kept
+    # Echoed clause from Hindi prompt must be dropped
+    hindi_prompt = style_prompt("hi")
+    assert is_prompt_echo("उसके बाद क्या करना है?", hindi_prompt)
+    assert clean_asr_text("उसके बाद क्या करना है?", hindi_prompt) == ""
 
 
 def test_clean_collapses_repetition_loops() -> None:
