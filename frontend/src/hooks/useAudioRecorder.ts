@@ -355,10 +355,7 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
     setState('uploading')
     try {
       await queueRef.current
-      if (pieceErrorRef.current) {
-        console.warn('Background piece upload had an error, proceeding with final recording chunk:', pieceErrorRef.current)
-        pieceErrorRef.current = null
-      }
+      if (pieceErrorRef.current) throw pieceErrorRef.current
       const file = new File([recorded.wav], `recording-${Date.now()}.wav`, { type: 'audio/wav' })
       const result = await api.uploadRecording(sessionId, file, { final: true })
       if (!result.ok) {

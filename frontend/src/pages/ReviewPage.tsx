@@ -183,13 +183,13 @@ export function ReviewPage() {
     cn('seg-item flex-1 justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold', activeTab === tab && 'seg-item-active')
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 bg-canvas px-3 pb-3 pt-2 text-ink md:px-4">
+    <div className="flex h-full min-h-0 flex-col gap-2 bg-canvas px-3 pb-3 pt-2 text-ink md:px-4 animate-fade-in">
       <header className="flex h-12 shrink-0 items-center gap-3">
         <Link
-          to={`/sessions/${session.id}/live`}
+          to="/sessions"
           className="btn-icon"
-          title="Return to Session"
-          aria-label="Return to Session"
+          title="Return to Consultations"
+          aria-label="Return to Consultations"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
         </Link>

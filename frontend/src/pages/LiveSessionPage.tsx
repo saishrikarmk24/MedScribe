@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Activity, AudioLines, FileText, Sparkles, Stethoscope } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Activity, ArrowRight, AudioLines, CheckCircle2, FileText, Sparkles, Stethoscope } from 'lucide-react'
 
 import {
   FlowStepper,
@@ -57,6 +57,9 @@ export function LiveSessionPage() {
     streamingSections,
   } = useSessionStore()
 
+  const navigate = useNavigate()
+  const [forwarding, setForwarding] = useState(false)
+  const forwardedRef = useRef(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [noteTab, setNoteTab] = useState<'draft' | 'final'>('draft')
   const [vitalsModalOpen, setVitalsModalOpen] = useState(false)
@@ -219,7 +222,18 @@ export function LiveSessionPage() {
   const entitiesShown = useReveal(sectionsDone ? entities.length : 0, 40, animateFlow)
 
   const flowStep = !hasTranscript ? 1 : !hasNoteContent ? 2 : 3
-  const reportReady = hasNoteContent && !isProcessing
+  const reportReady = hasNoteContent && !isProcessing && !recorder.recording && recorder.state !== 'uploading'
+
+  useEffect(() => {
+    if (reportReady && session?.id && !forwardedRef.current) {
+      forwardedRef.current = true
+      setForwarding(true)
+      const timer = window.setTimeout(() => {
+        navigate(`/sessions/${session.id}/review`, { replace: true })
+      }, 750)
+      return () => window.clearTimeout(timer)
+    }
+  }, [reportReady, session?.id, navigate])
 
   if (loadError) {
     return (
@@ -227,6 +241,31 @@ export function LiveSessionPage() {
         <InlineAlert kind="error" title="Could not load session">
           {loadError}
         </InlineAlert>
+      </div>
+    )
+  }
+
+  if (forwarding) {
+    return (
+      <div className="flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-canvas p-6 text-ink animate-fade-in">
+        <div className="flex flex-col items-center gap-4 text-center px-6 py-8 rounded-card border border-aqua/30 bg-surface shadow-float animate-scale-spring max-w-sm w-full mx-4">
+          <div className="relative flex items-center justify-center">
+            <span className="absolute h-16 w-16 rounded-full bg-aqua/20 animate-ping" />
+            <div className="relative grid h-14 w-14 place-items-center rounded-full bg-brand text-brand-fg shadow-card">
+              <CheckCircle2 className="h-7 w-7 text-aqua" />
+            </div>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold tracking-tight text-ink">Clinical Note Generated</h3>
+            <p className="mt-1 flex items-center justify-center gap-1.5 text-xs text-ink-2">
+              <span>Forwarding to Review &amp; Edit</span>
+              <ArrowRight className="h-3.5 w-3.5 text-brand animate-pulse" />
+            </p>
+          </div>
+          <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden mt-1 border border-line">
+            <div className="h-full bg-gradient-to-r from-brand via-aqua to-brand w-full animate-shimmer rounded-full" />
+          </div>
+        </div>
       </div>
     )
   }
