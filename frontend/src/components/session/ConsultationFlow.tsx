@@ -36,50 +36,42 @@ const STEPS = [
   { label: 'Report ready', icon: FileCheck2 },
 ] as const
 
-/** Mic → transcript → analysis → report, with particles streaming along the active connector. */
+/** Mic → transcript → analysis → report with clean, perfectly aligned progress track. */
 export function FlowStepper({ step, className }: { step: number; className?: string }) {
   return (
-    <ol className={cn('flex items-center', className)} aria-label="Consultation progress">
+    <ol className={cn('flex items-center justify-center', className)} aria-label="Consultation progress">
       {STEPS.map(({ label, icon: Icon }, index) => {
         const done = index < step || (index === STEPS.length - 1 && step >= STEPS.length - 1)
         const active = index === step && !done
         return (
           <li key={label} className={cn('flex items-center', index < STEPS.length - 1 && 'flex-1')}>
-            <div className="flex shrink-0 items-center gap-2.5">
+            <div className="flex shrink-0 items-center gap-2">
               <span
                 className={cn(
-                  'relative grid h-9 w-9 place-items-center rounded-full transition-all duration-500',
-                  done && 'bg-aqua text-aqua-fg shadow-[0_0_14px_rgba(86,214,202,0.45)] dark:bg-aqua dark:text-canvas',
-                  active && 'bg-brand text-brand-fg ring-4 ring-aqua/30 shadow-[0_0_18px_rgba(86,214,202,0.5)]',
+                  'relative grid h-7 w-7 place-items-center rounded-full transition-colors duration-200',
+                  done && 'bg-aqua text-aqua-fg font-bold shadow-xs dark:bg-aqua dark:text-canvas',
+                  active && 'bg-brand text-brand-fg ring-2 ring-aqua/40 font-bold',
                   !done && !active && 'bg-surface-3 text-ink-3',
                 )}
               >
-                {active ? <span className="absolute inset-0 rounded-full bg-aqua animate-ring-out" aria-hidden /> : null}
-                {done ? <Check className="relative h-4 w-4 stroke-[2.5]" /> : <Icon className={cn('relative h-4 w-4', active && 'animate-soft-bounce')} />}
+                {done ? <Check className="h-3.5 w-3.5 stroke-[2.5]" /> : <Icon className="h-3.5 w-3.5" />}
               </span>
               <span
                 className={cn(
-                  'hidden text-xs font-semibold transition-colors sm:inline',
-                  active ? 'text-ink font-bold' : done ? 'text-ink' : 'text-ink-3',
+                  'text-xs tracking-tight transition-colors sm:inline',
+                  active ? 'text-ink font-semibold' : done ? 'text-ink-2 font-medium' : 'text-ink-3',
                 )}
               >
                 {label}
               </span>
             </div>
             {index < STEPS.length - 1 ? (
-              <span className="relative mx-3 h-0.5 flex-1 overflow-hidden rounded-full bg-surface-3" aria-hidden>
-                <span
-                  className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-aqua to-brand transition-all duration-700 shadow-[0_0_8px_rgba(86,214,202,0.5)]"
+              <div className="relative mx-3.5 h-0.5 flex-1 rounded-full bg-surface-3 overflow-hidden" aria-hidden>
+                <div
+                  className="h-full rounded-full bg-aqua transition-all duration-300 ease-out"
                   style={{ width: index < step ? '100%' : '0%' }}
                 />
-                {index === step && !done ? (
-                  <>
-                    <span className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-aqua animate-flow-dot" />
-                    <span className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-aqua animate-flow-dot [animation-delay:0.55s]" />
-                    <span className="absolute top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-lime animate-flow-dot [animation-delay:1.1s]" />
-                  </>
-                ) : null}
-              </span>
+              </div>
             ) : null}
           </li>
         )

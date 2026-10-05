@@ -183,7 +183,7 @@ export function ReviewPage() {
     cn('seg-item flex-1 justify-center gap-1.5 px-2 py-1.5 text-xs font-semibold', activeTab === tab && 'seg-item-active')
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 bg-canvas px-3 pb-3 pt-2 text-ink md:px-4 animate-fade-in">
+    <div className="flex h-full min-h-0 flex-col gap-2 bg-canvas px-3 pb-3 pt-2 text-ink md:px-4">
       <header className="flex h-12 shrink-0 items-center gap-3">
         <Link
           to="/sessions"
@@ -244,7 +244,7 @@ export function ReviewPage() {
           ) : (
             <button
               type="button"
-              className="btn-primary btn-glow btn-shimmer font-semibold"
+              className="btn-primary"
               disabled={busy || !approvable}
               onClick={() => setShowApproveModal(true)}
               title="Review, approve and sign clinical note"

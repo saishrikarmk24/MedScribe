@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Activity, ArrowRight, AudioLines, CheckCircle2, FileText, Sparkles, Stethoscope } from 'lucide-react'
+import { Activity, AudioLines, FileText, Sparkles, Stethoscope } from 'lucide-react'
 
 import {
   FlowStepper,
@@ -58,7 +58,6 @@ export function LiveSessionPage() {
   } = useSessionStore()
 
   const navigate = useNavigate()
-  const [forwarding, setForwarding] = useState(false)
   const forwardedRef = useRef(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [noteTab, setNoteTab] = useState<'draft' | 'final'>('draft')
@@ -201,13 +200,14 @@ export function LiveSessionPage() {
     return { mentionedSections: mentioned, quietSections: quiet }
   }, [note])
 
+  const hasNote = Boolean(note && note.id && note.content)
   const hasNoteContent = mentionedSections.length > 0
   const hasTranscript = segments.length > 0
   const workspace = liveWorkspaceMode({
     recording: recorder.recording,
     processing: isProcessing,
     hasTranscript,
-    hasNote: hasNoteContent,
+    hasNote: hasNote || hasNoteContent,
   })
   const phase: 'capture' | 'processing' | 'report' =
     workspace === 'capture' ? 'capture' : workspace === 'theater' ? 'processing' : 'report'
@@ -221,19 +221,15 @@ export function LiveSessionPage() {
   const sectionsDone = hasNoteContent && sectionsShown >= mentionedSections.length
   const entitiesShown = useReveal(sectionsDone ? entities.length : 0, 40, animateFlow)
 
-  const flowStep = !hasTranscript ? 1 : !hasNoteContent ? 2 : 3
-  const reportReady = hasNoteContent && !isProcessing && !recorder.recording && recorder.state !== 'uploading'
+  const flowStep = recorder.recording ? 0 : !hasTranscript ? 1 : isProcessing ? 2 : 3
+  const noteReady = hasNote && !isProcessing && !recorder.recording && recorder.state !== 'uploading'
 
   useEffect(() => {
-    if (reportReady && session?.id && !forwardedRef.current) {
+    if (noteReady && session?.id && !forwardedRef.current) {
       forwardedRef.current = true
-      setForwarding(true)
-      const timer = window.setTimeout(() => {
-        navigate(`/sessions/${session.id}/review`, { replace: true })
-      }, 750)
-      return () => window.clearTimeout(timer)
+      navigate(`/sessions/${session.id}/review`, { replace: true })
     }
-  }, [reportReady, session?.id, navigate])
+  }, [noteReady, session?.id, navigate])
 
   if (loadError) {
     return (
@@ -241,55 +237,6 @@ export function LiveSessionPage() {
         <InlineAlert kind="error" title="Could not load session">
           {loadError}
         </InlineAlert>
-      </div>
-    )
-  }
-
-  if (forwarding) {
-    return (
-      <div className="relative flex h-full min-h-0 flex-col items-center justify-center overflow-hidden bg-canvas p-6 text-ink animate-fade-in">
-        {/* Ambient radial lighting */}
-        <div className="absolute h-96 w-96 rounded-full bg-aqua/15 blur-3xl animate-pulse pointer-events-none" />
-        <div className="absolute h-64 w-64 rounded-full bg-brand/20 blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col items-center gap-5 text-center px-8 py-9 rounded-card border border-aqua/40 bg-surface/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-2xl animate-scale-spring max-w-md w-full mx-4">
-          <div className="relative flex items-center justify-center">
-            <span className="absolute h-24 w-24 rounded-full border border-aqua/30 animate-ring-out" />
-            <span className="absolute h-24 w-24 rounded-full border border-aqua/20 animate-ring-out [animation-delay:0.75s]" />
-            <div className="relative grid h-16 w-16 place-items-center rounded-full bg-gradient-to-tr from-brand to-aqua text-brand-fg shadow-[0_0_24px_rgba(86,214,202,0.45)]">
-              <CheckCircle2 className="h-8 w-8 text-white drop-shadow-sm" />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <span className="mono text-[10px] font-bold uppercase tracking-wider text-aqua">
-              VoiceScribe Clinical Synthesis
-            </span>
-            <h3 className="text-lg font-bold tracking-tight text-ink">
-              Clinical Documentation Complete
-            </h3>
-            <p className="flex items-center justify-center gap-2 text-xs text-ink-2">
-              <span>Transitioning to Physician Review</span>
-              <ArrowRight className="h-3.5 w-3.5 text-aqua animate-pulse" />
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-1.5 py-1">
-            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
-              ✓ Audio Diarized
-            </span>
-            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
-              ✓ Clinical NLP
-            </span>
-            <span className="chip text-[11px] font-medium border-aqua/30 bg-aqua-soft text-aqua-fg">
-              ✓ 100% English SOAP
-            </span>
-          </div>
-
-          <div className="w-full bg-surface-2 rounded-full h-1.5 overflow-hidden mt-1 border border-line">
-            <div className="h-full bg-gradient-to-r from-brand via-aqua to-brand w-full animate-shimmer rounded-full" />
-          </div>
-        </div>
       </div>
     )
   }
@@ -306,12 +253,12 @@ export function LiveSessionPage() {
   }
 
   const titleBlock = (
-    <div className="min-w-0">
-      <h1 className="truncate text-lg font-semibold tracking-tight text-ink md:text-xl">
+    <div className="min-w-0 max-w-xs shrink-0">
+      <h1 className="truncate text-[15px] font-semibold tracking-tight text-ink md:text-base">
         {session.name || 'Outpatient Consultation'}
       </h1>
-      <p className="mt-0.5 truncate text-xs text-ink-3">
-        <span className="mono">{session.reference}</span>
+      <p className="mt-0.5 truncate text-2xs text-ink-3">
+        <span className="mono font-semibold text-brand">{session.reference}</span>
         {session.patient_name ? ` · ${session.patient_name}` : ''}
         {session.patient_id ? ` (${session.patient_id})` : ''}
       </p>
@@ -377,11 +324,11 @@ export function LiveSessionPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-canvas text-ink">
-      <header className="flex h-12 shrink-0 items-center gap-4 px-4 md:px-5">
+      <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line/60 bg-surface/50 px-4 md:px-6">
         {titleBlock}
-        <FlowStepper step={flowStep} className="hidden min-w-0 flex-1 md:flex" />
+        <FlowStepper step={flowStep} className="hidden min-w-0 flex-1 mx-4 md:flex" />
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          {reportReady ? (
+          {noteReady ? (
             <button
               type="button"
               onClick={() => setVitalsModalOpen(true)}
@@ -394,7 +341,7 @@ export function LiveSessionPage() {
           ) : null}
           <Link
             to={`/sessions/${session.id}/review`}
-            className={cn('btn-sm', reportReady ? 'btn-primary' : 'btn-secondary')}
+            className={cn('btn-sm', noteReady ? 'btn-primary' : 'btn-secondary')}
           >
             <FileText className="h-3.5 w-3.5" />
             <span>Review &amp; Approve</span>
@@ -455,11 +402,11 @@ export function LiveSessionPage() {
           <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
             {isProcessing && streamingSections ? (
               <StreamingNotePreview sections={streamingSections} />
-            ) : hasNoteContent ? (
+            ) : hasNote ? (
               <div className="space-y-3">
                 <NoteFallbackBanner fallback={note?.content.fallback} />
                 {mentionedSections.slice(0, sectionsShown).map((section) => (
-                  <article key={section.key} className="animate-reveal rounded-tile border border-line bg-surface p-4">
+                  <article key={section.key} className="rounded-tile border border-line bg-surface p-4">
                     <h3 className="mb-1.5 flex items-center gap-2 text-sm font-semibold tracking-tight text-ink">
                       <span className="h-4 w-1 rounded-full bg-aqua" />
                       {section.label}
@@ -477,7 +424,7 @@ export function LiveSessionPage() {
                     <div className="shimmer-skeleton h-3 w-8/12 rounded-full" />
                   </div>
                 ) : quietSections.length > 0 ? (
-                  <div className="animate-reveal rounded-tile bg-surface-2 p-3.5">
+                  <div className="rounded-tile bg-surface-2 p-3.5">
                     <p className="text-2xs font-semibold text-ink-3">Not discussed in this consultation</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {quietSections.map((label) => (
@@ -489,7 +436,7 @@ export function LiveSessionPage() {
                   </div>
                 ) : null}
                 {entitiesShown > 0 ? (
-                  <div className="hidden animate-reveal rounded-tile border border-line p-3 lg:block">
+                  <div className="hidden rounded-tile border border-line p-3 lg:block">
                     <p className="mb-2 text-2xs font-semibold text-ink-3">Clinical findings</p>
                     <div className="flex flex-wrap gap-1.5">
                       {entities.slice(0, entitiesShown).map((ent) => (
@@ -501,7 +448,7 @@ export function LiveSessionPage() {
                   </div>
                 ) : null}
               </div>
-            ) : hasTranscript ? (
+            ) : isProcessing ? (
               <WritingAnalysis stageDetail={stageDetail} />
             ) : (
               <div className="flex h-full flex-col items-center justify-center text-center">
