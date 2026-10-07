@@ -637,14 +637,14 @@ class LocalLLMProvider(LLMProvider):
         return NoteResponse(result=result, stats=stats)
 
     async def warmup(self) -> None:
-        """Ask the server to load the model now instead of on the first consultation."""
+        """Ask the server to load the model and allocate KV-cache/GPU memory now instead of on the first consultation."""
         if not self.is_ollama:
             return
         try:
-            response = await self._get_client().post(
-                f"{self._ollama_root}/api/generate",
-                json={"model": self.model, "prompt": "", "keep_alive": settings.local_llm_keep_alive},
-            )
+            dummy_prompt = "Patient has mild fever. Doctor advises rest."
+            url, payload = self._payload(dummy_prompt, self.model, stream=False)
+            payload["options"]["num_predict"] = 24
+            response = await self._get_client().post(url, json=payload)
             response.raise_for_status()
             logger.info("local_llm_warm", extra={"model": self.model})
         except Exception as exc:  # noqa: BLE001 - warm-up is best effort

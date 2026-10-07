@@ -198,7 +198,22 @@ class FasterWhisperProvider(ASRProvider):
         return self._model
 
     async def warmup(self) -> None:  # pragma: no cover - requires model download
-        await asyncio.to_thread(self._load)
+        model = await asyncio.to_thread(self._load)
+        try:
+            import numpy as np  # type: ignore
+
+            dummy_pcm = np.zeros(int(SAMPLE_RATE * 0.5), dtype=np.int16).tobytes()
+            dummy_frame = AudioFrame(
+                session_id="warmup",
+                sequence=0,
+                pcm=dummy_pcm,
+                sample_rate=SAMPLE_RATE,
+                duration_ms=500,
+            )
+            await asyncio.to_thread(self._transcribe_sync, model, dummy_frame)
+            logger.info("asr_warmup_complete", extra={"model": self.model_name, "device": self.device})
+        except Exception as exc:
+            logger.warning("asr_dummy_inference_failed", extra={"error": str(exc)})
         if self.second_pass is not None:
             try:
                 await asyncio.to_thread(self.second_pass.load)
