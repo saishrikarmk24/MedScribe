@@ -152,7 +152,9 @@ export function SettingsPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button type="button" className="btn-secondary" onClick={() => void runAiCheck()} disabled={checking}>
               {checking ? <Spinner /> : <TestTube2 className="h-4 w-4" aria-hidden />}
-              Test local LLM (Ollama)
+              {status?.ai?.mode === 'gemini' || status?.ai?.provider === 'gemini'
+                ? 'Test Gemini Cloud AI'
+                : `Test local LLM (${status?.ai?.provider || 'Ollama'})`}
             </button>
             {aiCheck ? (
               <span

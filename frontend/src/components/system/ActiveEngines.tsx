@@ -57,12 +57,49 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
   const asr = status.providers.asr
   const second = asr.second_pass
   const llmMock = Boolean(ai.mock) || ai.mode === 'mock'
+  const isGeminiAI = !llmMock && (ai.mode === 'gemini' || ai.provider === 'gemini' || String(ai.model || '').toLowerCase().startsWith('gemini'))
+  const isGeminiASR = asr.name === 'gemini'
   const fallbacks = (pipeline.llm_fallback_chain ?? '').split('→').map((m) => m.trim()).filter((m) => m && m !== ai.model)
 
+  let aiBadge = 'Ollama'
+  let aiNote = fallbacks.length
+    ? `If it is unreachable, ${fallbacks.join(', ')} is tried next; otherwise the note is marked as an offline fallback.`
+    : undefined
+
+  if (llmMock) {
+    aiBadge = 'Mock (rules only)'
+  } else if (isGeminiAI) {
+    aiBadge = 'Google Gemini (Cloud)'
+    aiNote = fallbacks.length
+      ? `Cloud API active. Fallbacks: ${fallbacks.join(', ')}.`
+      : 'Google Gemini cloud intelligence with multi-turn clinical reasoning and medical summarization.'
+  }
+
+  let asrValue = asr.name
+  let asrBadge = asr.mock ? 'Mock' : asr.loaded ? 'Loaded' : 'Loads on first recording'
+  let asrTone: Tone = asr.mock ? 'bad' : asr.loaded ? 'ok' : 'idle'
+
+  if (isGeminiASR) {
+    asrValue = asr.model ? `Google Gemini Multimodal Audio (${asr.model})` : 'Google Gemini Multimodal Audio'
+    asrBadge = 'Cloud Audio'
+    asrTone = 'ok'
+  } else if (asr.model) {
+    asrValue = `Faster-Whisper ${asr.model} (${asr.compute_type} on ${asr.device})`
+  }
+
+  let secondLabel = 'Second recogniser (IndicConformer)'
+  let secondValue = second?.model ?? 'not configured'
   let secondBadge = 'Off'
   let secondTone: Tone = 'off'
   let secondNote = 'Not enabled on this server. Whisper handles every language alone.'
-  if (second?.status === 'loaded') {
+
+  if (isGeminiASR) {
+    secondLabel = 'Multilingual recognition'
+    secondValue = 'Gemini Native Multilingual'
+    secondBadge = 'Native'
+    secondTone = 'ok'
+    secondNote = 'Gemini natively understands Indian English, Tamil, Hindi, and code-switched audio without requiring a second model pass.'
+  } else if (second?.status === 'loaded') {
     secondBadge = 'Loaded'
     secondTone = 'ok'
     secondNote = 'Transcribes mostly Tamil / Hindi / Telugu utterances, and re-does any Whisper output that looks broken.'
@@ -82,20 +119,16 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
         icon={<Sparkles className="h-4 w-4" aria-hidden />}
         label="Clinical note model"
         value={ai.model}
-        badge={llmMock ? 'Mock (rules only)' : 'Ollama'}
+        badge={aiBadge}
         tone={llmMock ? 'bad' : 'ok'}
-        note={
-          fallbacks.length
-            ? `If it is unreachable, ${fallbacks.join(', ')} is tried next; otherwise the note is marked as an offline fallback.`
-            : undefined
-        }
+        note={aiNote}
       />
       <Row
         icon={<AudioLines className="h-4 w-4" aria-hidden />}
         label="Speech-to-text"
-        value={asr.model ? `Faster-Whisper ${asr.model} (${asr.compute_type} on ${asr.device})` : asr.name}
-        badge={asr.mock ? 'Mock' : asr.loaded ? 'Loaded' : 'Loads on first recording'}
-        tone={asr.mock ? 'bad' : asr.loaded ? 'ok' : 'idle'}
+        value={asrValue}
+        badge={asrBadge}
+        tone={asrTone}
       />
       <Row
         icon={<Languages className="h-4 w-4" aria-hidden />}
@@ -106,8 +139,8 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
       />
       <Row
         icon={<ShieldCheck className="h-4 w-4" aria-hidden />}
-        label="Second recogniser (IndicConformer)"
-        value={second?.model ?? 'not configured'}
+        label={secondLabel}
+        value={secondValue}
         badge={secondBadge}
         tone={secondTone}
         note={secondNote}

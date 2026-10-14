@@ -49,4 +49,34 @@ describe('ActiveEngines', () => {
     expect(screen.getByText('Failed · Whisper only')).toBeInTheDocument()
     expect(screen.getByText('401 gated repo')).toBeInTheDocument()
   })
+
+  it('renders Google Gemini Cloud engine badges when running in cloud mode', () => {
+    const cloudStatus: SystemStatus = {
+      environment: 'production',
+      version: '1',
+      database: { connected: true, dialect: 'sqlite', using_fallback: true, url: '' },
+      ai: { provider: 'gemini', model: 'gemini-3.7-flash', mode: 'gemini', gemini_configured: true },
+      providers: {
+        asr: {
+          name: 'gemini',
+          mock: false,
+          model: 'gemini-3.7-flash',
+          second_pass: null,
+        },
+        diarization: { name: 'gemini', mock: false },
+        terminology: {},
+        security: {},
+      },
+      websocket: { connections: 0, sessions: 0 },
+      demo_mode_enabled: false,
+      pipeline: { languages: 'en,ta,hi' },
+    }
+
+    render(<ActiveEngines status={cloudStatus} />)
+    expect(screen.getByText('gemini-3.7-flash')).toBeInTheDocument()
+    expect(screen.getByText('Google Gemini (Cloud)')).toBeInTheDocument()
+    expect(screen.getByText('Cloud Audio')).toBeInTheDocument()
+    expect(screen.getByText('Native')).toBeInTheDocument()
+  })
 })
+
