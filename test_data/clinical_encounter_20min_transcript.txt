@@ -1,0 +1,127 @@
+CLINICAL CONSULTATION REFERENCE TRANSCRIPT (20 MIN ENCOUNTER)
+Doctor: Dr. Arvind Rao | Patient: Mr. Senthil Kumar (52M)
+Clinical Focus: T2DM, Diabetic Peripheral Neuropathy, Stage 1 HTN, GERD
+===========================================================================
+
+[DOCTOR]: Good morning. Please come in and take a seat. I am Dr. Arvind Rao. How are you feeling today, Mr. Senthil?
+
+[PATIENT]: Good morning, Doctor. Doctor, honestly I have not been feeling very well for the past three to four weeks. That is why I came in today.
+
+[DOCTOR]: I see. Take your time and tell me exactly what has been troubling you the most recently.
+
+[PATIENT]: Doctor, mainly in both my feet, there is a constant tingling and burning sensation. Especially when I lie down at night to sleep, the soles of my feet feel like they are on fire, like pins and needles sticking into the skin.
+
+[DOCTOR]: A burning and tingling sensation in both soles. Did this start suddenly, or has it been gradually building up over several weeks?
+
+[PATIENT]: It started slowly, Doctor. At first, maybe two months back, I only felt a little numbness at the tips of my toes after walking. But for the last three weeks, it has spread to the entire sole of both feet up to the ankles.
+
+[DOCTOR]: Does the burning feel worse at night, and does it ever disturb your sleep?
+
+[PATIENT]: Yes, exactly! By 11 PM or midnight, it becomes very uncomfortable. I have to keep taking my feet out from the blanket, and sometimes I wake up twice or thrice in the night because of the pain.
+
+[DOCTOR]: Have you noticed any weakness in your legs, or do you feel off-balance when you walk or get up quickly from a chair?
+
+[PATIENT]: Weakness is not too much, Doctor, but in the dark when I walk to the bathroom, I feel unsteady. Like I cannot clearly feel the texture of the floor under my feet.
+
+[DOCTOR]: That is an important clue. That sensation suggests peripheral sensory involvement, which we commonly see with longstanding diabetes. Have you noticed any wounds, blisters, or cuts on your feet recently?
+
+[PATIENT]: No cuts that I saw, Doctor, but my skin on the heels feels very dry and cracked.
+
+[DOCTOR]: Good, we will do a thorough foot examination in a moment. Now, let us review your blood pressure and heart health. Have you had any chest tightness, shortness of breath, or palpitations?
+
+[PATIENT]: No chest pain or shortness of breath, Doctor. But in the mornings, sometimes I have a heavy throbbing headache right at the back of my neck.
+
+[DOCTOR]: A morning occipital headache can often happen when blood pressure runs on the higher side. Are you currently taking your blood pressure medication every single day without missing?
+
+[PATIENT]: I am taking Telma 40 mg, Doctor, but to be honest, last month I missed four or five days because my tablet strip was finished and I was traveling for work.
+
+[DOCTOR]: It is very important never to skip blood pressure medication, Mr. Senthil. Uncontrolled pressure puts extra strain on both your kidneys and your heart. We will check your BP today and see if we need to adjust the dosage.
+
+[DOCTOR]: How about your digestion and stomach? Any acidity, nausea, or burning in the chest?
+
+[PATIENT]: Yes, Doctor, frequent acidity. After dinner, if I eat anything spicy or oily, there is severe heartburn and sour water coming up in my throat. I have been taking Pantocid 40 mg whenever it happens.
+
+[DOCTOR]: Are you taking the Pantocid only when you get symptoms, or consistently on an empty stomach in the morning?
+
+[PATIENT]: Mostly only when the heartburn starts after food, Doctor.
+
+[DOCTOR]: Understood. Pantoprazole works much better when taken 30 minutes before your morning breakfast so the acid pumps are blocked for the whole day. Taking it after dinner provides much less relief.
+
+[DOCTOR]: Let us talk about your diabetes. When was your last HbA1c test done, and what was the value?
+
+[PATIENT]: My last test was about six months ago, Doctor. At that time, the HbA1c was 8.4 percent, and the fasting sugar was around 168.
+
+[DOCTOR]: 8.4 percent is definitely higher than our target. For you, we want that HbA1c below 7.0 percent to protect your nerves, eyes, and kidneys. What diabetes tablets are you taking currently?
+
+[PATIENT]: I take Metformin 500 mg twice a day, once after breakfast and once after dinner. Sometimes if I feel feverish or have body pain, I also took Dolo 650.
+
+[DOCTOR]: Have you experienced any episodes of shakiness, sweating, dizziness, or intense hunger that felt like low sugar, or hypoglycemia?
+
+[PATIENT]: No dizziness or sweating like low sugar, Doctor. But I feel very tired around 4 in the afternoon every day, with heavy thirst and needing to pass urine more often.
+
+[DOCTOR]: Frequent urination and excessive thirst are classic signs of elevated blood glucose. Tell me about your daily diet. Are you having white rice for both lunch and dinner?
+
+[PATIENT]: Yes, Doctor. In our family, lunch is always white rice with sambar or rasam, and for dinner also usually rice or three dosas with coconut chutney. Evening tea with two spoons of sugar and biscuits.
+
+[DOCTOR]: That explains the higher glycemic load. Refined carbohydrates like white rice and dosas cause steep sugar spikes. We will need to transition your diet toward whole grains, millets, chapati, and much more green vegetables, protein like dal or paneer, and cut out table sugar.
+
+[PATIENT]: Understood, Doctor. I will follow whatever diet chart you give. I really want this burning in my feet to go away.
+
+[DOCTOR]: Do you smoke, chew tobacco, or consume alcohol?
+
+[PATIENT]: No tobacco at all, Doctor. Alcohol I drink occasionally, maybe once a month at social functions, two beers at most.
+
+[DOCTOR]: That is fine. Now, let us proceed to the examination couch. First, I am going to check your vital signs.
+
+[PATIENT]: Sure, Doctor.
+
+[DOCTOR]: Your blood pressure today is 142 over 88 millimeters of mercury. Pulse is 76 beats per minute, regular rhythm. Oxygen saturation is 98 percent on room air. Temperature is 98.4 Fahrenheit, normal.
+
+[PATIENT]: Is 142 over 88 too high, Doctor?
+
+[DOCTOR]: It is stage 1 hypertension, higher than our diabetic target of under 130 over 80. Now, please take off your socks and shoes. Let me examine both your feet.
+
+[PATIENT]: Here you go, Doctor.
+
+[DOCTOR]: Looking at the skin: no active ulcers or calluses, but significant xerosis, dry cracked skin on both heels. Both dorsalis pedis pulses and posterior tibial pulses are palpable and equal.
+
+[PATIENT]: That is a relief, Doctor.
+
+[DOCTOR]: Now I am testing with this 10-gram Semmes-Weinstein monofilament wire. Tell me 'yes' every time you feel me touch your foot with it. Close your eyes please.
+
+[PATIENT]: ... Yes ... Yes ... No, I did not feel anything on the great toe ... Yes on the heel.
+
+[DOCTOR]: You have reduced sensation over the first and third metatarsal heads and the great toe bilaterally. Testing with the 128 Hertz tuning fork: vibration sense is also reduced at both medial malleoli, lasting only 4 seconds.
+
+[PATIENT]: Does that mean my nerves are permanently damaged, Doctor?
+
+[DOCTOR]: It confirms early Diabetic Sensorimotor Polyneuropathy. The good news is that by strictly controlling your blood sugar, improving microvascular circulation, and starting neuro-protective medications, we can arrest the progression and significantly relieve the burning symptoms.
+
+[PATIENT]: Doctor, what tests do we need to do today?
+
+[DOCTOR]: We need a comprehensive metabolic panel: fasting blood glucose, post-prandial blood sugar, HbA1c, fasting lipid profile, serum creatinine, electrolytes, and a spot urine microalbumin to creatinine ratio to check kidney filtration.
+
+[PATIENT]: Will do all of them at the lab right now, Doctor.
+
+[DOCTOR]: Excellent. Now regarding your medications: for diabetes, we will step up Metformin to 1000 mg sustained release twice daily, or switch to Glycomet-GP1 in the morning after we see your lab results. For the blood pressure, since it is 142 over 88, we will combine Telma with Amlodipine, so Telma-AM 40/5 once daily in the morning.
+
+[PATIENT]: And for the burning pain in my feet, Doctor? That is the most painful thing at night.
+
+[DOCTOR]: For the neuropathic pain, I am prescribing a combination of Pregabalin 75 mg with Methylcobalamin 1500 micrograms, to be taken once daily at bedtime. This calms the hyperactive nerve signals and allows you to sleep peacefully.
+
+[PATIENT]: Will it cause daytime sleepiness?
+
+[DOCTOR]: Because you take it right before sleeping, the mild drowsiness actually helps you get sound rest. By morning, you should feel refreshed. For the acidity, take Pantocid 40 mg once daily, strictly 30 minutes before breakfast on an empty stomach for two weeks.
+
+[DOCTOR]: Now, three crucial foot care rules: First, inspect the bottom of both feet every night with a mirror for any small cuts, blisters, or reddened spots. Second, never walk barefoot, even inside your house. Always wear soft, supportive indoor slippers. Third, moisturize your feet daily with a urea-based cream, but do not apply cream between the toes.
+
+[PATIENT]: I understand, Doctor. No barefoot walking and daily checking.
+
+[DOCTOR]: If you ever notice any cut that doesn't heal, localized redness, heat, swelling, or pus, come to the clinic immediately. Otherwise, please complete the blood tests today, start the new prescriptions tonight, and come see me in three weeks with your updated lab reports.
+
+[PATIENT]: Thank you so much, Dr. Rao! You explained everything so clearly. I feel much more confident now.
+
+[DOCTOR]: You are very welcome, Mr. Senthil. Take care, follow the diet plan, and we will get your numbers back to normal. Have a great day.
+
+[PATIENT]: Thank you, Doctor. Have a good day.
+

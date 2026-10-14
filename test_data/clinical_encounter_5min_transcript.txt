@@ -1,0 +1,37 @@
+CLINICAL CONSULTATION REFERENCE TRANSCRIPT (5 MIN ENCOUNTER)
+Doctor: Dr. Arvind Rao | Patient: Mr. Senthil Kumar (52M)
+Clinical Focus: T2DM, Diabetic Peripheral Neuropathy, Stage 1 HTN, GERD
+===========================================================================
+
+[DOCTOR]: Good morning. Please come in and take a seat. I am Dr. Arvind Rao. How are you feeling today, Mr. Senthil?
+
+[PATIENT]: Good morning, Doctor. Doctor, honestly I have not been feeling very well for the past three to four weeks. That is why I came in today.
+
+[DOCTOR]: I see. Take your time and tell me exactly what has been troubling you the most recently.
+
+[PATIENT]: Doctor, mainly in both my feet, there is a constant tingling and burning sensation. Especially when I lie down at night to sleep, the soles of my feet feel like they are on fire, like pins and needles sticking into the skin.
+
+[DOCTOR]: A burning and tingling sensation in both soles. Did this start suddenly, or has it been gradually building up over several weeks?
+
+[PATIENT]: It started slowly, Doctor. At first, maybe two months back, I only felt a little numbness at the tips of my toes after walking. But for the last three weeks, it has spread to the entire sole of both feet up to the ankles.
+
+[DOCTOR]: Does the burning feel worse at night, and does it ever disturb your sleep?
+
+[PATIENT]: Yes, exactly! By 11 PM or midnight, it becomes very uncomfortable. I have to keep taking my feet out from the blanket, and sometimes I wake up twice or thrice in the night because of the pain.
+
+[DOCTOR]: Have you noticed any weakness in your legs, or do you feel off-balance when you walk or get up quickly from a chair?
+
+[PATIENT]: Weakness is not too much, Doctor, but in the dark when I walk to the bathroom, I feel unsteady. Like I cannot clearly feel the texture of the floor under my feet.
+
+[DOCTOR]: That is an important clue. That sensation suggests peripheral sensory involvement, which we commonly see with longstanding diabetes. Have you noticed any wounds, blisters, or cuts on your feet recently?
+
+[PATIENT]: No cuts that I saw, Doctor, but my skin on the heels feels very dry and cracked.
+
+[DOCTOR]: Good, we will do a thorough foot examination in a moment. Now, let us review your blood pressure and heart health. Have you had any chest tightness, shortness of breath, or palpitations?
+
+[PATIENT]: No chest pain or shortness of breath, Doctor. But in the mornings, sometimes I have a heavy throbbing headache right at the back of my neck.
+
+[DOCTOR]: A morning occipital headache can often happen when blood pressure runs on the higher side. Are you currently taking your blood pressure medication every single day without missing?
+
+[PATIENT]: I am taking Telma 40 mg, Doctor, but to be honest, last month I missed four or five days because my tablet strip was finished and I was traveling for work.
+

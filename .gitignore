@@ -48,4 +48,7 @@ exports/
 .env.gemma
 install-logs/
 scripts/bin/
+test_data/*.wav
+test_data/*.mp3
+
 
