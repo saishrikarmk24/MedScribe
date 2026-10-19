@@ -315,12 +315,16 @@ class LocalLLMProvider(LLMProvider):
         messages = self._messages(prompt, model)
         if self.is_ollama:
             full_prompt = "\n".join(message["content"] for message in messages)
+            keep_alive_val: str | int = settings.local_llm_keep_alive
+            if str(keep_alive_val).strip() == "-1":
+                keep_alive_val = -1
+
             payload: dict[str, Any] = {
                 "model": model,
                 "messages": messages,
                 "stream": stream,
                 "format": "json",
-                "keep_alive": settings.local_llm_keep_alive,
+                "keep_alive": keep_alive_val,
                 "options": {
                     "num_gpu": 99,
                     "num_ctx": self._context_window(full_prompt, max_tokens),
