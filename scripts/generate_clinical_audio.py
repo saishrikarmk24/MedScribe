@@ -117,14 +117,14 @@ CLINICAL_SCRIPT = [
 ]
 
 
-async def synthesize_turn(text: str, voice: str, output_path: str):
-    """Synthesize a single turn via edge-tts."""
+async def synthesize_turn(text: str, voice: str, output_path: str, rate: str = "+25%"):
+    """Synthesize a single turn via edge-tts at a brisk, natural conversational pace."""
     import edge_tts
-    communicate = edge_tts.Communicate(text=text, voice=voice)
+    communicate = edge_tts.Communicate(text=text, voice=voice, rate=rate)
     await communicate.save(output_path)
 
 
-def generate_audio(duration_target_mins: int = 20):
+def generate_audio(duration_target_mins: int = 20, rate: str = "+25%", pause_sec: float = 0.35):
     """Generate the full multi-turn consultation audio."""
     import edge_tts  # verify import
     
@@ -133,22 +133,22 @@ def generate_audio(duration_target_mins: int = 20):
     output_dir.mkdir(exist_ok=True, parents=True)
     
     # Determine turns to use based on target duration
-    # Full script (~1,800 spoken words + natural pauses) expands into ~15-20 min encounter.
-    # If duration_target_mins < 10, use first 15 turns.
     turns = CLINICAL_SCRIPT if duration_target_mins >= 15 else CLINICAL_SCRIPT[:16]
     
     print(f"\n===========================================================================")
-    print(f"🎙️ GENERATING {duration_target_mins}-MIN CLINICAL ENCOUNTER AUDIO BENCHMARK")
+    print(f"🎙️ GENERATING {duration_target_mins}-MIN CLINICAL ENCOUNTER AUDIO (SPEED: {rate})")
     print(f"===========================================================================")
     print(f"Doctor Voice  : {VOICE_DOCTOR} (Dr. Arvind Rao)")
     print(f"Patient Voice : {VOICE_PATIENT} (Mr. Senthil Kumar)")
-    print(f"Total Dialogue Turns: {len(turns)}")
-    print(f"Target Output : {output_dir / 'clinical_encounter_20min.wav'}\n")
+    print(f"Speaking Rate : {rate} (fast, snappy conversational pace)")
+    print(f"Inter-turn Gap: {pause_sec}s")
+    print(f"Total Turns   : {len(turns)}")
+    print(f"Target Output : {output_dir / f'clinical_encounter_{duration_target_mins}min.wav'}\n")
 
     # 1. Save reference transcript
     transcript_file = output_dir / f"clinical_encounter_{duration_target_mins}min_transcript.txt"
     with open(transcript_file, "w", encoding="utf-8") as f:
-        f.write(f"CLINICAL CONSULTATION REFERENCE TRANSCRIPT ({duration_target_mins} MIN ENCOUNTER)\n")
+        f.write(f"CLINICAL CONSULTATION REFERENCE TRANSCRIPT ({duration_target_mins} MIN ENCOUNTER - SPEED: {rate})\n")
         f.write("Doctor: Dr. Arvind Rao | Patient: Mr. Senthil Kumar (52M)\n")
         f.write("Clinical Focus: T2DM, Diabetic Peripheral Neuropathy, Stage 1 HTN, GERD\n")
         f.write("=" * 75 + "\n\n")
@@ -161,20 +161,20 @@ def generate_audio(duration_target_mins: int = 20):
     turn_files = []
     
     try:
-        print(f"\n[1/3] Synthesizing {len(turns)} audio turns with neural voices...")
+        print(f"\n[1/3] Synthesizing {len(turns)} audio turns with fast neural voices ({rate})...")
         for i, (speaker, text) in enumerate(turns):
             voice = VOICE_DOCTOR if speaker == "Doctor" else VOICE_PATIENT
             turn_path = temp_dir / f"turn_{i:03d}.mp3"
             print(f"  [{i+1}/{len(turns)}] {speaker}: \"{text[:45]}...\"")
-            asyncio.run(synthesize_turn(text, voice, str(turn_path)))
+            asyncio.run(synthesize_turn(text, voice, str(turn_path), rate=rate))
             turn_files.append(turn_path)
 
-        # 3. Create ffmpeg concat list with 0.8s silence between turns
-        print("\n[2/3] Adding natural conversational pauses and stitching...")
+        # 3. Create ffmpeg concat list with snappy silence between turns
+        print(f"\n[2/3] Adding snappy {pause_sec}s conversational pauses and stitching...")
         silence_file = temp_dir / "silence.mp3"
         subprocess.run([
             "ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=24000:cl=mono",
-            "-t", "0.8", "-q:a", "9", "-acodec", "libmp3lame", str(silence_file)
+            "-t", str(pause_sec), "-q:a", "9", "-acodec", "libmp3lame", str(silence_file)
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
         concat_list = temp_dir / "concat_list.txt"
@@ -227,5 +227,7 @@ def generate_audio(duration_target_mins: int = 20):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate realistic clinical audio benchmark")
     parser.add_argument("--duration", type=int, default=20, help="Target duration in minutes (5 or 20)")
+    parser.add_argument("--rate", type=str, default="+25%", help="Speech rate (e.g. +20%%, +25%%, +30%%)")
+    parser.add_argument("--pause", type=float, default=0.35, help="Inter-turn pause in seconds (e.g. 0.35)")
     args = parser.parse_args()
-    generate_audio(args.duration)
+    generate_audio(duration_target_mins=args.duration, rate=args.rate, pause_sec=args.pause)
