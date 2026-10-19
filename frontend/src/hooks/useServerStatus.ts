@@ -3,7 +3,6 @@ import {
   checkServerHealth,
   fetchBeaconServerUrl,
   getServerBaseUrl,
-  setServerBaseUrl,
   subscribeServerUrl,
 } from '@/services/serverConfig'
 
@@ -34,19 +33,25 @@ export function useServerStatus() {
     setIsChecking(true)
 
     try {
-      let activeUrl = targetUrl || getServerBaseUrl()
+      // If deployed on Vercel and no manual targetUrl is specified, always sync latest beacon
+      const isVercel = typeof window !== 'undefined' && window.location.origin.includes('vercel.app')
+      if (isVercel && !targetUrl) {
+        const beaconUrl = await fetchBeaconServerUrl(true)
+        if (beaconUrl) {
+          setServerUrlState(beaconUrl)
+        }
+      }
 
-      // If activeUrl is vercel self or unreachable, discover from beacon first
-      let res = await checkServerHealth(activeUrl, 2500)
+      let activeUrl = targetUrl || getServerBaseUrl()
+      let res = await checkServerHealth(activeUrl, 6000)
+
+      // If activeUrl is failing, refresh from beacon
       if (!res.ok) {
-        const discovered = await fetchBeaconServerUrl()
+        const discovered = await fetchBeaconServerUrl(true)
         if (discovered && discovered !== activeUrl) {
           activeUrl = discovered
-          res = await checkServerHealth(discovered, 2500)
-          if (res.ok) {
-            setServerBaseUrl(discovered)
-            setServerUrlState(discovered)
-          }
+          setServerUrlState(discovered)
+          res = await checkServerHealth(discovered, 6000)
         }
       }
 

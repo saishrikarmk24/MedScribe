@@ -35,7 +35,6 @@ export function initServerUrl(): string {
     if (paramServer) {
       const sanitized = cleanUrl(paramServer)
       localStorage.setItem(STORAGE_KEY, sanitized)
-      // Clean query parameter from browser address bar without reload
       params.delete('server')
       const newQuery = params.toString() ? `?${params.toString()}` : ''
       window.history.replaceState({}, '', `${window.location.pathname}${newQuery}${window.location.hash}`)
@@ -48,7 +47,6 @@ export function initServerUrl(): string {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
     const cleaned = cleanUrl(stored)
-    // If stored URL is not vercel self, use it
     if (!cleaned.includes('vercel.app')) {
       return cleaned
     }
@@ -59,7 +57,6 @@ export function initServerUrl(): string {
     return cleanUrl(envUrl)
   }
 
-  // Local development default
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return 'http://127.0.0.1:8000'
   }
@@ -71,35 +68,20 @@ const BEACON_URL = 'https://ntfy.sh/voicescribe_doctor_live_beacon/raw?poll=1'
 
 /**
  * Automatically discovers the active Kaggle Cloudflare tunnel URL from the cloud beacon.
- * Tests candidate URLs starting from newest to oldest to find the live responding host.
+ * Reads the latest trycloudflare.com URL published by the active Kaggle runner.
  */
-export async function fetchBeaconServerUrl(): Promise<string | null> {
+export async function fetchBeaconServerUrl(forceUpdate = true): Promise<string | null> {
   try {
     const res = await fetch(`${BEACON_URL}&_=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return null
     const text = (await res.text()).trim()
-    const matches = text.match(/https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=]+/g)
+    const matches = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/g)
     if (!matches || matches.length === 0) return null
 
-    // Unique URLs, newest first
-    const candidates = Array.from(new Set(matches.map(cleanUrl).filter(Boolean))).reverse()
-
-    // Test each candidate quickly to find the one actively responding
-    for (const candidate of candidates) {
-      if (!candidate.startsWith('http')) continue
-      const health = await checkServerHealth(candidate, 2200)
-      if (health.ok) {
-        if (candidate !== currentServerUrl) {
-          setServerBaseUrl(candidate)
-        }
-        return candidate
-      }
-    }
-
-    // If none are online right now, return the newest candidate so UI knows the target host
-    if (candidates.length > 0) {
-      const latest = candidates[0]
-      if (latest !== currentServerUrl && !currentServerUrl.includes('trycloudflare.com')) {
+    // Pick the newest URL published by Kaggle
+    const latest = cleanUrl(matches[matches.length - 1])
+    if (latest) {
+      if (forceUpdate || latest !== currentServerUrl) {
         setServerBaseUrl(latest)
       }
       return latest
@@ -167,11 +149,10 @@ export function getWsUrl(path: string): string {
  */
 export async function checkServerHealth(
   targetUrl?: string,
-  timeoutMs: number = 3000
+  timeoutMs: number = 6000
 ): Promise<{ ok: boolean; status?: unknown; error?: string }> {
   const base = targetUrl ? cleanUrl(targetUrl) : getServerBaseUrl()
 
-  // Guard against checking self when running on Vercel
   if (typeof window !== 'undefined' && base === window.location.origin && window.location.origin.includes('vercel.app')) {
     return {
       ok: false,
@@ -197,7 +178,7 @@ export async function checkServerHealth(
     if (!contentType.includes('application/json')) {
       return {
         ok: false,
-        error: 'Target host is serving HTML instead of backend API. Connecting to active tunnel...',
+        error: 'Target host returned HTML instead of API. Connecting to active tunnel...',
       }
     }
     const data = await res.json()
