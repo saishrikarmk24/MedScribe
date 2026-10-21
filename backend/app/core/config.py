@@ -157,7 +157,7 @@ class Settings(BaseSettings):
     # call and may warrant a cheaper/faster model.
     gemini_asr_model: str | None = None
     gemini_asr_timeout_seconds: float = 180.0
-    gemini_asr_max_retries: int = 2
+    gemini_asr_max_retries: int = 3
     asr_max_audio_bytes: int = 48 * 1024 * 1024
 
     # --- audio -------------------------------------------------------------

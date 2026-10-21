@@ -124,22 +124,29 @@ class GeminiProvider(LLMProvider):
         started = time.perf_counter()
         last_error: LLMError | None = None
 
-        while attempts < max(1, self.max_retries):
+        candidate_models = [self.model]
+        for fallback in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
+        max_attempts = max(len(candidate_models), self.max_retries)
+
+        while attempts < max_attempts:
+            current_model = candidate_models[attempts % len(candidate_models)]
             attempts += 1
             try:
                 response = await asyncio.wait_for(
-                    client.aio.models.generate_content(model=self.model, contents=prompt, config=config),
+                    client.aio.models.generate_content(model=current_model, contents=prompt, config=config),
                     timeout=self.timeout_seconds,
                 )
             except asyncio.TimeoutError as exc:
                 last_error = LLMTimeout(f"Gemini call timed out after {self.timeout_seconds:.0f}s")
-                logger.warning("gemini_timeout", extra={"purpose": purpose, "attempt": attempts})
+                logger.warning("gemini_timeout", extra={"purpose": purpose, "attempt": attempts, "model": current_model})
                 _ = exc
             except Exception as exc:  # SDK raises its own error hierarchy
                 mapped = self._map_exception(exc)
                 logger.warning(
                     "gemini_call_failed",
-                    extra={"purpose": purpose, "attempt": attempts, "code": mapped.code, "error": str(exc)[:400]},
+                    extra={"purpose": purpose, "attempt": attempts, "model": current_model, "code": mapped.code, "error": str(exc)[:400]},
                 )
                 if not mapped.retryable:
                     metrics.increment("gemini_errors_total", code=mapped.code)

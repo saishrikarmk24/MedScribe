@@ -201,10 +201,17 @@ class GeminiASRProvider(ASRProvider):
 
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
-        for attempt in range(1, max(1, settings.gemini_asr_max_retries) + 1):
+        candidate_models = [self.model]
+        for fallback in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+            if fallback not in candidate_models:
+                candidate_models.append(fallback)
+
+        max_attempts = max(len(candidate_models), settings.gemini_asr_max_retries)
+        for attempt in range(max_attempts):
+            current_model = candidate_models[attempt % len(candidate_models)]
             try:
                 raw = await asyncio.wait_for(
-                    asyncio.to_thread(self._generate, payload, mime_type),
+                    asyncio.to_thread(self._generate, payload, mime_type, current_model),
                     timeout=settings.gemini_asr_timeout_seconds,
                 )
                 return self._parse(raw)
@@ -212,7 +219,7 @@ class GeminiASRProvider(ASRProvider):
                 last_error = exc
                 logger.warning(
                     "gemini_asr_timeout",
-                    extra={"session_id": session_id, "attempt": attempt, "model": self.model},
+                    extra={"session_id": session_id, "attempt": attempt + 1, "model": current_model},
                 )
             except Exception as exc:  # noqa: BLE001 - provider errors are re-raised below
                 last_error = exc
@@ -221,10 +228,16 @@ class GeminiASRProvider(ASRProvider):
                     break
                 logger.warning(
                     "gemini_asr_retrying",
-                    extra={"session_id": session_id, "attempt": attempt, "error": str(exc)[:200]},
+                    extra={
+                        "session_id": session_id,
+                        "attempt": attempt + 1,
+                        "model": current_model,
+                        "next_model": candidate_models[(attempt + 1) % len(candidate_models)] if attempt < max_attempts - 1 else None,
+                        "error": str(exc)[:200],
+                    },
                 )
-            if attempt < max(1, settings.gemini_asr_max_retries):
-                await asyncio.sleep(min(2.0 * attempt, 5.0))
+            if attempt < max_attempts - 1:
+                await asyncio.sleep(min(1.5 * (attempt + 1), 5.0) + (attempt * 0.2))
 
         raise GeminiASRUnavailable(f"Gemini transcription failed: {last_error}") from last_error
 
@@ -270,12 +283,12 @@ class GeminiASRProvider(ASRProvider):
             )
         )
 
-    def _generate(self, payload: bytes, mime_type: str) -> str:
+    def _generate(self, payload: bytes, mime_type: str, model: str | None = None) -> str:
         client = self._ensure_client()
         from google.genai import types
 
         response = client.models.generate_content(
-            model=self.model,
+            model=model or self.model,
             contents=[
                 types.Part.from_bytes(data=payload, mime_type=mime_type),
                 types.Part.from_text(text=_PROMPT),

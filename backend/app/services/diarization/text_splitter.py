@@ -215,11 +215,27 @@ class GeminiTextSplitter:
 
         try:
             client = self._ensure_client()
-            response = await client.aio.models.generate_content(
-                model=self._model,
-                contents=prompt,
-            )
-            raw = response.text.strip()
+            models_to_try = [self._model]
+            for fallback in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+                if fallback not in models_to_try:
+                    models_to_try.append(fallback)
+
+            raw = ""
+            for m in models_to_try:
+                try:
+                    response = await client.aio.models.generate_content(
+                        model=m,
+                        contents=prompt,
+                    )
+                    raw = (response.text or "").strip()
+                    if raw:
+                        break
+                except Exception as exc:
+                    logger.warning("text_splitter_model_failed", extra={"model": m, "error": str(exc)[:200]})
+                    continue
+
+            if not raw:
+                return {}
 
             # Strip markdown fences if the model wraps its reply.
             if raw.startswith("```"):
