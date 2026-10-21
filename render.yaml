@@ -1,0 +1,26 @@
+﻿services:
+  - type: web
+    name: voicescribe-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: AI_MODE
+        value: gemini
+      - key: ASR_PROVIDER
+        value: gemini
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: ALLOW_SQLITE_FALLBACK
+        value: "true"
+      - key: DEV_AUTH_ENABLED
+        value: "true"
