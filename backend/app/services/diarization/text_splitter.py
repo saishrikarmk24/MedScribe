@@ -131,7 +131,7 @@ class GeminiTextSplitter:
 
     def __init__(self, *, model: str | None = None) -> None:
         chosen = model or _DEFAULT_MODEL
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
             chosen = "gemini-3-flash-preview"
         self._model = chosen
         self._client: Any | None = None

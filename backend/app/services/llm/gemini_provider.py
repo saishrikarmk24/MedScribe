@@ -64,7 +64,7 @@ class GeminiProvider(LLMProvider):
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
         raw_model = model or settings.gemini_model
-        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
             raw_model = "gemini-3-flash-preview"
         self.model = raw_model
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
