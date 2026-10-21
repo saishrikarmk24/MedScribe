@@ -9,6 +9,8 @@ const STORAGE_KEY = 'voicescribe_active_server_url'
 type ServerUrlListener = (url: string) => void
 const listeners = new Set<ServerUrlListener>()
 
+export const DEFAULT_ONLINE_BACKEND = 'https://voicescribe-api-10wq.onrender.com'
+
 export function cleanUrl(raw: string): string {
   if (!raw) return ''
   const matches = raw.match(/https?:\/\/[a-zA-Z0-9-._~:/?#[\]@!$&'()*+,;=]+/g)
@@ -27,7 +29,7 @@ export function cleanUrl(raw: string): string {
  * Automatically inspects the URL query string (?server=...) on load.
  */
 export function initServerUrl(): string {
-  if (typeof window === 'undefined') return 'http://127.0.0.1:8000'
+  if (typeof window === 'undefined') return DEFAULT_ONLINE_BACKEND
 
   try {
     const params = new URLSearchParams(window.location.search)
@@ -47,7 +49,12 @@ export function initServerUrl(): string {
   const stored = localStorage.getItem(STORAGE_KEY)
   if (stored) {
     const cleaned = cleanUrl(stored)
-    if (!cleaned.includes('vercel.app')) {
+    // Ignore vercel.app or stale non-10wq onrender hostnames stored in previous testing sessions
+    if (
+      cleaned &&
+      !cleaned.includes('vercel.app') &&
+      !cleaned.includes('voicescribe-api.onrender.com')
+    ) {
       return cleaned
     }
   }
@@ -61,7 +68,7 @@ export function initServerUrl(): string {
     return 'http://127.0.0.1:8000'
   }
 
-  return window.location.origin
+  return DEFAULT_ONLINE_BACKEND
 }
 
 const BEACON_URL = 'https://ntfy.sh/voicescribe_doctor_live_beacon/raw?poll=1'

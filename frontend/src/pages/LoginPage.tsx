@@ -49,10 +49,6 @@ export function LoginPage() {
   const [savingBackend, setSavingBackend] = useState(false)
   const [backendFeedback, setBackendFeedback] = useState<string | null>(null)
 
-  const isVercelLocalOnly =
-    currentHost.includes('vercel.app') ||
-    (typeof window !== 'undefined' && currentHost === window.location.origin)
-
   const handleSaveBackend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!customBackendUrl.trim()) return
@@ -100,12 +96,7 @@ export function LoginPage() {
       redirectAfterLogin(resp.user.role)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('405') || msg.includes('Method Not Allowed')) {
-        setError('Frontend is not connected to a backend API server. Please enter your Render backend URL below.')
-        setShowBackendConfig(true)
-      } else {
-        setError(msg || 'Authentication failed. Please verify credentials.')
-      }
+      setError(msg || 'Authentication failed. Please verify credentials.')
     } finally {
       setLoading(false)
     }
@@ -506,29 +497,33 @@ export function LoginPage() {
 
             {/* Backend Server Configuration / Status */}
             <div className="mt-6 border-t border-line pt-4">
-              {isVercelLocalOnly || showBackendConfig ? (
+              {showBackendConfig ? (
                 <form
                   onSubmit={handleSaveBackend}
-                  className="rounded-tile border border-amber-300/60 bg-amber-50/60 p-3.5 text-xs text-ink dark:bg-amber-950/20 space-y-2.5"
+                  className="rounded-tile border border-line bg-surface-2 p-3.5 text-xs text-ink space-y-2.5"
                 >
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-ink flex items-center gap-1.5">
                       <Server className="h-3.5 w-3.5 text-brand" />
                       Backend Server API Host
                     </span>
-                    <span className={cn('badge', isVercelLocalOnly ? 'tone-warning' : 'tone-neutral')}>
-                      {isVercelLocalOnly ? 'Setup Required' : 'Custom Host'}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowBackendConfig(false)}
+                      className="link text-[11px]"
+                    >
+                      Close
+                    </button>
                   </div>
                   <p className="text-[11px] text-ink-2">
-                    Enter your deployed Render backend URL (e.g. <code className="mono">https://voicescribe-api.onrender.com</code>):
+                    Active API endpoint: <code className="mono">{currentHost}</code>
                   </p>
                   <div className="flex gap-2">
                     <input
                       type="url"
                       value={customBackendUrl}
                       onChange={(e) => setCustomBackendUrl(e.target.value)}
-                      placeholder="https://your-api.onrender.com"
+                      placeholder="https://voicescribe-api-10wq.onrender.com"
                       className="field-input text-xs mono py-1.5 flex-1"
                       required
                     />
@@ -544,7 +539,7 @@ export function LoginPage() {
                 <div className="flex items-center justify-between text-xs text-ink-3">
                   <span className="flex items-center gap-1.5 truncate max-w-[280px]">
                     <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
-                    Host: <span className="mono text-ink-2 truncate">{currentHost}</span>
+                    Cloud Backend: <span className="mono text-ink-2 truncate">{currentHost.replace(/^https?:\/\//, '')}</span>
                   </span>
                   <button
                     type="button"
