@@ -80,7 +80,7 @@ class GeminiASRProvider(ASRProvider):
     def __init__(self, model: str | None = None) -> None:
         chosen = model or settings.effective_gemini_asr_model
         if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
-            chosen = "gemini-3.8-flash"
+            chosen = "gemini-3-flash-preview"
         self.model = chosen
         self._client: Any | None = None
 
@@ -202,7 +202,7 @@ class GeminiASRProvider(ASRProvider):
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
         candidate_models = [self.model]
-        for fallback in ("gemini-3.6-flash", "gemini-3.5-flash-lite"):
+        for fallback in ("gemini-3-flash-preview", "gemini-3.8-flash", "gemini-flash-latest"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
