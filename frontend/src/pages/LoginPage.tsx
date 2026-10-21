@@ -12,10 +12,12 @@ import {
   KeyRound,
   ShieldAlert,
   Loader2,
+  Server,
 } from 'lucide-react'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/utils/cn'
+import { getServerBaseUrl, setServerBaseUrl, checkServerHealth } from '@/services/serverConfig'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -39,6 +41,36 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  // Backend server URL configuration state
+  const [currentHost, setCurrentHost] = useState(getServerBaseUrl())
+  const [customBackendUrl, setCustomBackendUrl] = useState(getServerBaseUrl())
+  const [showBackendConfig, setShowBackendConfig] = useState(false)
+  const [savingBackend, setSavingBackend] = useState(false)
+  const [backendFeedback, setBackendFeedback] = useState<string | null>(null)
+
+  const isVercelLocalOnly =
+    currentHost.includes('vercel.app') ||
+    (typeof window !== 'undefined' && currentHost === window.location.origin)
+
+  const handleSaveBackend = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customBackendUrl.trim()) return
+    setSavingBackend(true)
+    setBackendFeedback(null)
+    const url = customBackendUrl.trim().replace(/\/$/, '')
+    setServerBaseUrl(url)
+    setCurrentHost(url)
+    const health = await checkServerHealth(url, 5000)
+    setSavingBackend(false)
+    if (health.ok) {
+      setBackendFeedback('Connected successfully!')
+      setError(null)
+      setTimeout(() => setShowBackendConfig(false), 900)
+    } else {
+      setBackendFeedback(`Connected, but health check returned: ${health.error || 'unreachable'}`)
+    }
+  }
 
   const redirectAfterLogin = (role: string) => {
     const from = (location.state as { from?: { pathname: string } })?.from?.pathname
@@ -67,7 +99,13 @@ export function LoginPage() {
       setAuth(resp.token, resp.user)
       redirectAfterLogin(resp.user.role)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Authentication failed. Please verify credentials.')
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('405') || msg.includes('Method Not Allowed')) {
+        setError('Frontend is not connected to a backend API server. Please enter your Render backend URL below.')
+        setShowBackendConfig(true)
+      } else {
+        setError(msg || 'Authentication failed. Please verify credentials.')
+      }
     } finally {
       setLoading(false)
     }
@@ -93,7 +131,13 @@ export function LoginPage() {
       setAuth(resp.token, resp.user)
       redirectAfterLogin('ADMIN')
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Administrator authentication failed.')
+      const msg = err instanceof Error ? err.message : String(err)
+      if (msg.includes('405') || msg.includes('Method Not Allowed')) {
+        setError('Frontend is not connected to a backend API server. Please enter your Render backend URL below.')
+        setShowBackendConfig(true)
+      } else {
+        setError(msg || 'Administrator authentication failed.')
+      }
     } finally {
       setLoading(false)
     }
@@ -459,6 +503,59 @@ export function LoginPage() {
                 )}
               </div>
             )}
+
+            {/* Backend Server Configuration / Status */}
+            <div className="mt-6 border-t border-line pt-4">
+              {isVercelLocalOnly || showBackendConfig ? (
+                <form
+                  onSubmit={handleSaveBackend}
+                  className="rounded-tile border border-amber-300/60 bg-amber-50/60 p-3.5 text-xs text-ink dark:bg-amber-950/20 space-y-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-ink flex items-center gap-1.5">
+                      <Server className="h-3.5 w-3.5 text-brand" />
+                      Backend Server API Host
+                    </span>
+                    <span className={cn('badge', isVercelLocalOnly ? 'tone-warning' : 'tone-neutral')}>
+                      {isVercelLocalOnly ? 'Setup Required' : 'Custom Host'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-ink-2">
+                    Enter your deployed Render backend URL (e.g. <code className="mono">https://voicescribe-api.onrender.com</code>):
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={customBackendUrl}
+                      onChange={(e) => setCustomBackendUrl(e.target.value)}
+                      placeholder="https://your-api.onrender.com"
+                      className="field-input text-xs mono py-1.5 flex-1"
+                      required
+                    />
+                    <button type="submit" disabled={savingBackend} className="btn-primary btn-sm shrink-0">
+                      {savingBackend ? 'Checking...' : 'Save & Connect'}
+                    </button>
+                  </div>
+                  {backendFeedback && (
+                    <p className="text-[11px] text-brand font-medium">{backendFeedback}</p>
+                  )}
+                </form>
+              ) : (
+                <div className="flex items-center justify-between text-xs text-ink-3">
+                  <span className="flex items-center gap-1.5 truncate max-w-[280px]">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
+                    Host: <span className="mono text-ink-2 truncate">{currentHost}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowBackendConfig(true)}
+                    className="link text-xs shrink-0"
+                  >
+                    Change Host
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

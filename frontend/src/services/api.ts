@@ -3,7 +3,7 @@
  * through the backend, which owns the API key.
  */
 
-import { API_BASE } from '@/constants'
+import { getApiUrl } from '@/services/serverConfig'
 import type {
   AudioChunk,
   AuthResponse,
@@ -67,7 +67,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   let response: Response
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(getApiUrl(path), {
       ...init,
       headers: headers(init?.headers),
       signal: init?.signal ?? controller.signal,
@@ -197,7 +197,7 @@ export const api = {
     if (identity.email) authHeaders['X-User-Email'] = identity.email
     if (identity.role) authHeaders['X-User-Role'] = identity.role
     const final = options.final ?? true
-    const response = await fetch(`${API_BASE}/sessions/${sessionId}/audio/upload?final=${final}`, {
+    const response = await fetch(getApiUrl(`/sessions/${sessionId}/audio/upload?final=${final}`), {
       method: 'POST',
       body: form,
       headers: authHeaders,
@@ -214,7 +214,7 @@ export const api = {
     const authHeaders: Record<string, string> = {}
     if (identity.email) authHeaders['X-User-Email'] = identity.email
     if (identity.role) authHeaders['X-User-Role'] = identity.role
-    const response = await fetch(`${API_BASE}/sessions/transcribe_clip`, {
+    const response = await fetch(getApiUrl('/sessions/transcribe_clip'), {
       method: 'POST',
       body: form,
       headers: authHeaders,
@@ -228,7 +228,7 @@ export const api = {
 
   // ---- export -------------------------------------------------------------
   exportSession: async (sessionId: string, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
-    const response = await fetch(`${API_BASE}/sessions/${sessionId}/export?format=${format}`, {
+    const response = await fetch(getApiUrl(`/sessions/${sessionId}/export?format=${format}`), {
       method: 'POST',
       headers: headers(),
     })
