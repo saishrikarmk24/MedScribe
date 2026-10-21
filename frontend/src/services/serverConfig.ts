@@ -36,7 +36,9 @@ export function initServerUrl(): string {
     const paramServer = params.get('server')
     if (paramServer) {
       const sanitized = cleanUrl(paramServer)
-      localStorage.setItem(STORAGE_KEY, sanitized)
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(STORAGE_KEY, sanitized)
+      }
       params.delete('server')
       const newQuery = params.toString() ? `?${params.toString()}` : ''
       window.history.replaceState({}, '', `${window.location.pathname}${newQuery}${window.location.hash}`)
@@ -46,7 +48,7 @@ export function initServerUrl(): string {
     console.warn('Could not parse server query parameter:', err)
   }
 
-  const stored = localStorage.getItem(STORAGE_KEY)
+  const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
   if (stored) {
     const cleaned = cleanUrl(stored)
     // Ignore vercel.app or stale non-10wq onrender hostnames stored in previous testing sessions

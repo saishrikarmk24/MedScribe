@@ -63,11 +63,11 @@ class Settings(BaseSettings):
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-3-flash-preview"
-    ai_mode: AIMode = AIMode.LOCAL
+    ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
-    gemini_update_interval_seconds: float = 10.0
-    gemini_min_segments_per_update: int = 3
+    gemini_update_interval_seconds: float = 4.0
+    gemini_min_segments_per_update: int = 1
     gemini_timeout_seconds: float = 90.0
     gemini_max_retries: int = 2
     gemini_temperature: float = 0.1
@@ -116,8 +116,8 @@ class Settings(BaseSettings):
 
     # --- pipeline providers ------------------------------------------------
     # "auto" picks CUDA float16 when a GPU is present and CPU int8 otherwise.
-    asr_provider: ASRProviderName = ASRProviderName.FASTER_WHISPER
-    diarization_provider: DiarizationProviderName = DiarizationProviderName.LOCAL
+    asr_provider: ASRProviderName = ASRProviderName.GEMINI
+    diarization_provider: DiarizationProviderName = DiarizationProviderName.GEMINI
     faster_whisper_model: str = "large-v3-turbo"
     parakeet_model: str = "nvidia/parakeet-ctc-0.6b"
     asr_device: str = "auto"
@@ -214,11 +214,11 @@ class Settings(BaseSettings):
     def effective_ai_mode(self) -> AIMode:
         if self.ai_mode is AIMode.MOCK:
             return AIMode.MOCK
+        if self.gemini_configured or self.ai_mode is AIMode.GEMINI:
+            return AIMode.GEMINI
         if self.ai_mode in (AIMode.LOCAL, AIMode.OLLAMA):
             return self.ai_mode
-        if self.ai_mode is AIMode.GEMINI and self.gemini_configured:
-            return AIMode.GEMINI
-        return AIMode.LOCAL
+        return AIMode.GEMINI if self.gemini_configured else AIMode.LOCAL
 
     @property
     def audio_storage_path(self) -> Path:
@@ -239,28 +239,34 @@ class Settings(BaseSettings):
 
     @property
     def pipeline_summary(self) -> dict[str, str]:
-        """Single source of truth for the offline stack shown in Settings."""
+        """Single source of truth for the stack shown in Settings."""
         asr = self.asr_provider.value
-        if asr in ("gemini", "parakeet", "mock"):
+        is_cloud_gemini = asr == "gemini" or self.effective_ai_mode is AIMode.GEMINI
+        if asr == "gemini":
+            asr_line = f"Google Gemini Multimodal Audio ({self.effective_gemini_asr_model})"
+        elif asr in ("parakeet", "mock"):
             asr_line = f"{asr} ({self.parakeet_model})" if asr == "parakeet" else asr
         else:
-            # Every Whisper-family provider name runs Faster-Whisper with this model.
             asr_line = f"Faster-Whisper {self.faster_whisper_model} ({self.asr_compute_type} on {self.asr_device})"
         code_switching = self.indic_asr_language in ("auto", "", "code_switching", "indic")
         second_pass = (
-            f"IndicConformer ({self.asr_second_pass_model}, {self.asr_second_pass_decoder})"
-            if self.asr_second_pass == "indic_conformer"
-            else "off"
+            "Gemini Native Multilingual"
+            if is_cloud_gemini
+            else (
+                f"IndicConformer ({self.asr_second_pass_model}, {self.asr_second_pass_decoder})"
+                if self.asr_second_pass == "indic_conformer"
+                else "off"
+            )
         )
         return {
-            "llm_server": f"{self.local_llm_base_url} ({self.local_llm_api} API)",
-            "llm_fallback_chain": " → ".join(self.local_llm_model_chain),
+            "llm_server": f"Google Gemini Cloud API ({self.gemini_model})" if self.effective_ai_mode is AIMode.GEMINI else f"{self.local_llm_base_url} ({self.local_llm_api} API)",
+            "llm_fallback_chain": f"{self.gemini_model} (Cloud API)" if self.effective_ai_mode is AIMode.GEMINI else " → ".join(self.local_llm_model_chain),
             "audio": "Browser 16 kHz mono WAV, streamed in ~15 s pieces → server preprocess (VAD)",
             "asr": asr_line,
             "asr_second_pass": second_pass,
-            "languages": f"{self.asr_languages} ({'per-utterance code-switching' if code_switching else 'fixed: ' + self.indic_asr_language})",
-            "diarization": self.diarization_provider.value,
-            "llm": f"{self.effective_ai_mode.value} / {self.local_llm_model if self.effective_ai_mode.value in ('local', 'ollama') else self.gemini_model}",
+            "languages": f"Multilingual ({self.asr_languages})" if is_cloud_gemini else f"{self.asr_languages} ({'per-utterance code-switching' if code_switching else 'fixed: ' + self.indic_asr_language})",
+            "diarization": "Google Gemini Audio Diarization" if is_cloud_gemini else self.diarization_provider.value,
+            "llm": f"gemini / {self.gemini_model}" if self.effective_ai_mode is AIMode.GEMINI else f"{self.effective_ai_mode.value} / {self.local_llm_model}",
             "grounding": "Entities must match the transcript; assessment/plan must match the doctor's own words",
         }
 

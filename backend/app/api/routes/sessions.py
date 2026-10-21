@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from app.api.deps import CurrentPrincipal, DbSession, SessionDep
-from app.core.config import settings
+from app.core.config import AIMode, settings
 from app.core.logging import get_logger, metrics
 from app.models import (
     AudioSource,
@@ -59,8 +59,9 @@ async def create_session(payload: SessionCreate, db: DbSession, principal: Curre
         ai_mode=settings.effective_ai_mode.value,
         model_name=(
             payload.model_name
-            or (settings.local_llm_model if settings.effective_ai_mode.value in ("local", "ollama")
-                else (settings.gemini_model if settings.gemini_configured else "medscribe-rules-v1"))
+            or (settings.gemini_model if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)
+                else (settings.local_llm_model if settings.effective_ai_mode.value in ("local", "ollama")
+                else "medscribe-rules-v1"))
         ),
         asr_provider=payload.asr_provider or (settings.asr_provider.value if hasattr(settings.asr_provider, "value") else str(settings.asr_provider)),
     )

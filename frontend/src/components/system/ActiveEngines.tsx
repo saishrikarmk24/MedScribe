@@ -54,25 +54,25 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
   }
 
   const { ai, pipeline = {} } = status
-  const asr = status.providers.asr
+  const asr = status.providers?.asr || {}
   const second = asr.second_pass
   const llmMock = Boolean(ai.mock) || ai.mode === 'mock'
-  const isGeminiAI = !llmMock && (ai.mode === 'gemini' || ai.provider === 'gemini' || String(ai.model || '').toLowerCase().startsWith('gemini'))
-  const isGeminiASR = asr.name === 'gemini'
+  const isGeminiAI = !llmMock && (ai.mode === 'gemini' || ai.provider === 'gemini' || String(ai.model || '').toLowerCase().startsWith('gemini') || Boolean(ai.gemini_configured))
+  const isGeminiASR = asr.name === 'gemini' || asr.name === 'gemini_asr' || isGeminiAI
   const fallbacks = (pipeline.llm_fallback_chain ?? '').split('→').map((m) => m.trim()).filter((m) => m && m !== ai.model)
 
-  let aiBadge = 'Ollama'
-  let aiNote = fallbacks.length
-    ? `If it is unreachable, ${fallbacks.join(', ')} is tried next; otherwise the note is marked as an offline fallback.`
-    : undefined
+  let aiBadge = isGeminiAI ? 'Google Gemini (Cloud)' : 'Ollama'
+  let aiNote = isGeminiAI
+    ? (fallbacks.length
+      ? `Cloud API active. Fallbacks: ${fallbacks.join(', ')}.`
+      : 'Google Gemini cloud intelligence with multi-turn clinical reasoning and medical summarization.')
+    : (fallbacks.length
+      ? `If it is unreachable, ${fallbacks.join(', ')} is tried next; otherwise the note is marked as an offline fallback.`
+      : undefined)
 
   if (llmMock) {
     aiBadge = 'Mock (rules only)'
-  } else if (isGeminiAI) {
-    aiBadge = 'Google Gemini (Cloud)'
-    aiNote = fallbacks.length
-      ? `Cloud API active. Fallbacks: ${fallbacks.join(', ')}.`
-      : 'Google Gemini cloud intelligence with multi-turn clinical reasoning and medical summarization.'
+    aiNote = undefined
   }
 
   let asrValue = asr.name
@@ -80,37 +80,35 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
   let asrTone: Tone = asr.mock ? 'bad' : asr.loaded ? 'ok' : 'idle'
 
   if (isGeminiASR) {
-    asrValue = asr.model ? `Google Gemini Multimodal Audio (${asr.model})` : 'Google Gemini Multimodal Audio'
+    asrValue = asr.model ? `Google Gemini Multimodal Audio (${asr.model})` : 'Google Gemini Multimodal Audio (gemini-3-flash-preview)'
     asrBadge = 'Cloud Audio'
     asrTone = 'ok'
   } else if (asr.model) {
     asrValue = `Faster-Whisper ${asr.model} (${asr.compute_type} on ${asr.device})`
   }
 
-  let secondLabel = 'Second recogniser (IndicConformer)'
-  let secondValue = second?.model ?? 'not configured'
-  let secondBadge = 'Off'
-  let secondTone: Tone = 'off'
-  let secondNote = 'Not enabled on this server. Whisper handles every language alone.'
+  let secondLabel = isGeminiASR ? 'Multilingual recognition' : 'Second recogniser (IndicConformer)'
+  let secondValue = isGeminiASR ? 'Gemini Native Multilingual' : (second?.model ?? 'not configured')
+  let secondBadge = isGeminiASR ? 'Native' : 'Off'
+  let secondTone: Tone = isGeminiASR ? 'ok' : 'off'
+  let secondNote = isGeminiASR
+    ? 'Gemini natively understands Indian English, Tamil, Hindi, and code-switched audio without requiring a second model pass.'
+    : 'Not enabled on this server. Whisper handles every language alone.'
 
-  if (isGeminiASR) {
-    secondLabel = 'Multilingual recognition'
-    secondValue = 'Gemini Native Multilingual'
-    secondBadge = 'Native'
-    secondTone = 'ok'
-    secondNote = 'Gemini natively understands Indian English, Tamil, Hindi, and code-switched audio without requiring a second model pass.'
-  } else if (second?.status === 'loaded') {
-    secondBadge = 'Loaded'
-    secondTone = 'ok'
-    secondNote = 'Transcribes mostly Tamil / Hindi / Telugu utterances, and re-does any Whisper output that looks broken.'
-  } else if (second?.status === 'not_loaded') {
-    secondBadge = 'Enabled · loads on first Indian-language speech'
-    secondTone = 'idle'
-    secondNote = 'Turned on in the server .env. It is downloaded/loaded the first time it is needed; if that fails this shows the reason.'
-  } else if (second?.status === 'failed') {
-    secondBadge = 'Failed · Whisper only'
-    secondTone = 'bad'
-    secondNote = second.error ?? 'Could not be loaded.'
+  if (!isGeminiASR) {
+    if (second?.status === 'loaded') {
+      secondBadge = 'Loaded'
+      secondTone = 'ok'
+      secondNote = 'Transcribes mostly Tamil / Hindi / Telugu utterances, and re-does any Whisper output that looks broken.'
+    } else if (second?.status === 'not_loaded') {
+      secondBadge = 'Enabled · loads on first Indian-language speech'
+      secondTone = 'idle'
+      secondNote = 'Turned on in the server .env. It is downloaded/loaded the first time it is needed; if that fails this shows the reason.'
+    } else if (second?.status === 'failed') {
+      secondBadge = 'Failed · Whisper only'
+      secondTone = 'bad'
+      secondNote = second.error ?? 'Could not be loaded.'
+    }
   }
 
   return (

@@ -23,14 +23,13 @@ import { useUiStore } from '@/store/uiStore'
 const TARGET_SAMPLE_RATE = 16000
 const MAX_RECORDING_SECONDS = 30 * 60
 const MIN_RECORDING_SECONDS = 0.4
-// A piece is cut at the quietest point after PIECE_MIN_SECONDS once it is
-// PIECE_TARGET_SECONDS long and that point is silent, or at PIECE_MAX_SECONDS
-// regardless, so a word is never split unless nobody pauses for 25 seconds.
+// A piece is cut at natural pauses after PIECE_MIN_SECONDS once it reaches
+// PIECE_TARGET_SECONDS (~15s), or at PIECE_MAX_SECONDS (20s) regardless.
 const PIECE_TARGET_SECONDS = 15
 const PIECE_MIN_SECONDS = 8
-const PIECE_MAX_SECONDS = 25
+const PIECE_MAX_SECONDS = 20
 const PIECE_CHECK_SECONDS = 1
-const SILENCE_RMS = 0.01
+const SILENCE_RMS = 0.025
 const CUT_FRAME_SECONDS = 0.25
 
 export type RecorderState = 'idle' | 'requesting' | 'recording' | 'uploading' | 'error'

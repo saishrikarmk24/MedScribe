@@ -210,8 +210,9 @@ class GeminiASRProvider(ASRProvider):
         for attempt in range(max_attempts):
             current_model = candidate_models[attempt % len(candidate_models)]
             try:
+                self.model = current_model
                 raw = await asyncio.wait_for(
-                    asyncio.to_thread(self._generate, payload, mime_type, current_model),
+                    asyncio.to_thread(self._generate, payload, mime_type),
                     timeout=settings.gemini_asr_timeout_seconds,
                 )
                 return self._parse(raw)
@@ -283,12 +284,12 @@ class GeminiASRProvider(ASRProvider):
             )
         )
 
-    def _generate(self, payload: bytes, mime_type: str, model: str | None = None) -> str:
+    def _generate(self, payload: bytes, mime_type: str) -> str:
         client = self._ensure_client()
         from google.genai import types
 
         response = client.models.generate_content(
-            model=model or self.model,
+            model=self.model,
             contents=[
                 types.Part.from_bytes(data=payload, mime_type=mime_type),
                 types.Part.from_text(text=_PROMPT),

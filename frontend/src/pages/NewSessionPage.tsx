@@ -64,13 +64,15 @@ export function NewSessionPage() {
         faculty_name: null,
         mode: 'MICROPHONE',
         audio_source: 'MICROPHONE',
+        model_name: 'gemini-3-flash-preview',
+        asr_provider: 'gemini',
       })
       if (autoStart) {
         await api.startSession(session.id)
         pushToast({
           kind: 'success',
           title: `${session.reference} started`,
-          detail: status ? `Note model: ${status.ai.model}` : undefined,
+          detail: status?.ai?.model ? `Note model: ${status.ai.model}` : 'Google Gemini 3 Flash Preview active',
         })
       } else {
         pushToast({ kind: 'success', title: `${session.reference} created` })
@@ -198,7 +200,7 @@ export function NewSessionPage() {
               <div className="px-5 pb-5">
                 <ActiveEngines status={status} />
                 <p className="field-hint">
-                  Models are set in the server <code className="mono">.env</code> (the Kaggle runner), not per consultation.
+                  Google Gemini Cloud API active. Encrypted audio streaming and automated note generation.
                 </p>
               </div>
             </Card>
