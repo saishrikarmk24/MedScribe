@@ -63,7 +63,10 @@ class GeminiProvider(LLMProvider):
         temperature: float | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
-        self.model = model or settings.gemini_model
+        raw_model = model or settings.gemini_model
+        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+            raw_model = "gemini-3.8-flash"
+        self.model = raw_model
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
         self.max_retries = max_retries or settings.gemini_max_retries
         self.temperature = settings.gemini_temperature if temperature is None else temperature

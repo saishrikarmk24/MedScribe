@@ -104,8 +104,8 @@ class ClinicalTextSplitter:
             last = role
         return result
 
-# Cheap, fast model – only doing text classification, not generation.
-_DEFAULT_MODEL = "gemini-2.0-flash-lite"
+# Fast, reliable model for turn splitting text classification.
+_DEFAULT_MODEL = "gemini-3.8-flash"
 
 
 class GeminiTextSplitter:
@@ -130,7 +130,10 @@ class GeminiTextSplitter:
     )
 
     def __init__(self, *, model: str | None = None) -> None:
-        self._model = model or _DEFAULT_MODEL
+        chosen = model or _DEFAULT_MODEL
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+            chosen = "gemini-3.8-flash"
+        self._model = chosen
         self._client: Any | None = None
 
     # ------------------------------------------------------------------ client

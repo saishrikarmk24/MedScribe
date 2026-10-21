@@ -24,7 +24,7 @@ services:
       # Inside compose Postgres is a hard dependency - never silently fall back.
       ALLOW_SQLITE_FALLBACK: 'false'
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.8-flash}
       AI_MODE: ${AI_MODE:-gemini}
       ENABLE_DEMO_MODE: 'true'
       ENVIRONMENT: docker

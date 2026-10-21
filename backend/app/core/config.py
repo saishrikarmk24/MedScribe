@@ -62,7 +62,7 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3.7-flash"
+    gemini_model: str = "gemini-3.8-flash"
     ai_mode: AIMode = AIMode.LOCAL
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
@@ -180,6 +180,15 @@ class Settings(BaseSettings):
     def _retired_groq_mode(cls, value: object) -> object:
         if isinstance(value, str) and value.strip().lower() == "groq":
             return AIMode.GEMINI.value
+        return value
+
+    @field_validator("gemini_model", "gemini_asr_model", mode="before")
+    @classmethod
+    def _upgrade_legacy_gemini_models(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip():
+            val_clean = value.strip().lower()
+            if any(legacy in val_clean for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+                return "gemini-3.8-flash"
         return value
 
     @field_validator("gemini_api_key", "huggingface_token", "local_llm_api_key", mode="before")

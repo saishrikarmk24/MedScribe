@@ -78,7 +78,10 @@ class GeminiASRProvider(ASRProvider):
     is_mock = False
 
     def __init__(self, model: str | None = None) -> None:
-        self.model = model or settings.effective_gemini_asr_model
+        chosen = model or settings.effective_gemini_asr_model
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7")):
+            chosen = "gemini-3.8-flash"
+        self.model = chosen
         self._client: Any | None = None
 
     # ---------------------------------------------------------------- client
