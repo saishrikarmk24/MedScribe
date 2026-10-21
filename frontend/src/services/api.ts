@@ -60,7 +60,7 @@ function headers(extra?: HeadersInit): HeadersInit {
   return { ...base, ...(extra as Record<string, string> | undefined) }
 }
 
-const REQUEST_TIMEOUT_MS = 15000
+const REQUEST_TIMEOUT_MS = 60000
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController()
@@ -74,7 +74,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new ApiError(408, 'The server did not respond. The Kaggle tunnel may be busy — try again.')
+      throw new ApiError(
+        408,
+        'The server took longer than expected to respond. If your cloud backend is waking up from idle (cold start), please wait 15 seconds and try again.',
+      )
     }
     throw error
   } finally {

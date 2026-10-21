@@ -149,14 +149,14 @@ export function getWsUrl(path: string): string {
  */
 export async function checkServerHealth(
   targetUrl?: string,
-  timeoutMs: number = 6000
+  timeoutMs: number = 15000
 ): Promise<{ ok: boolean; status?: unknown; error?: string }> {
   const base = targetUrl ? cleanUrl(targetUrl) : getServerBaseUrl()
 
   if (typeof window !== 'undefined' && base === window.location.origin && window.location.origin.includes('vercel.app')) {
     return {
       ok: false,
-      error: 'Connecting to Cloudflare tunnel...',
+      error: 'Backend API host is not configured yet.',
     }
   }
 
@@ -178,7 +178,7 @@ export async function checkServerHealth(
     if (!contentType.includes('application/json')) {
       return {
         ok: false,
-        error: 'Target host returned HTML instead of API. Connecting to active tunnel...',
+        error: 'Target host returned HTML instead of API. Verify your backend URL.',
       }
     }
     const data = await res.json()
