@@ -7,7 +7,6 @@ import {
   Mail,
   User,
   AlertCircle,
-  Building2,
   ChevronRight,
   KeyRound,
   ShieldAlert,
@@ -182,10 +181,14 @@ export function LoginPage() {
             <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-lime/15 blur-3xl" />
 
             <div className="relative">
-              <span className="icon-badge h-12 w-12">
-                <Building2 className="h-6 w-6" />
-              </span>
-              <h1 className="mt-6 text-title font-semibold tracking-tight md:text-display">SIMS Hospital</h1>
+              <div className="flex h-13 w-13 items-center justify-center rounded-full bg-white p-2 shadow-md ring-4 ring-white/15">
+                <img
+                  src="/sims-icon.png"
+                  alt="SIMS Hospital logo"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <h1 className="mt-5 text-title font-semibold tracking-tight md:text-display">SIMS Hospital</h1>
               <p className="mt-2 text-sm font-semibold text-brand-fg/90">Ambulatory Care & Clinical Documentation System</p>
               <p className="mt-3 max-w-xs text-sm leading-relaxed text-brand-fg/70">
                 Secure clinical workstation with live ambient AI transcription
