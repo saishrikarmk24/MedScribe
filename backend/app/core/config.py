@@ -190,7 +190,7 @@ class Settings(BaseSettings):
     def _upgrade_legacy_gemini_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
+            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
                 return "gemini-3-flash-preview"
         return value
 

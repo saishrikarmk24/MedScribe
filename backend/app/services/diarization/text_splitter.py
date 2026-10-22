@@ -131,7 +131,7 @@ class GeminiTextSplitter:
 
     def __init__(self, *, model: str | None = None) -> None:
         chosen = model or _DEFAULT_MODEL
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
             chosen = "gemini-3-flash-preview"
         self._model = chosen
         self._client: Any | None = None
@@ -216,7 +216,7 @@ class GeminiTextSplitter:
         try:
             client = self._ensure_client()
             models_to_try = [self._model]
-            for fallback in ("gemini-3-flash-preview", "gemini-3.8-flash", "gemini-flash-latest"):
+            for fallback in ("gemini-3-flash-preview", "gemini-3.5-flash"):
                 if fallback not in models_to_try:
                     models_to_try.append(fallback)
 

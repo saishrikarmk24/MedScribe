@@ -39,6 +39,9 @@ def build_llm_provider(model_name: str | None = None) -> LLMProvider:
     )
     target_model = model_name or default_model
     target_lower = target_model.lower()
+    if "gemini" in target_lower and any(legacy in target_lower for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
+        target_model = "gemini-3-flash-preview"
+        target_lower = target_model.lower()
 
     # Mock mode and sessions pinned to the rule engine must never reach a real model:
     # the local provider's fallback chain would otherwise load one on this machine.

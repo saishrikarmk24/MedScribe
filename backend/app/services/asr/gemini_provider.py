@@ -79,7 +79,7 @@ class GeminiASRProvider(ASRProvider):
 
     def __init__(self, model: str | None = None) -> None:
         chosen = model or settings.effective_gemini_asr_model
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
             chosen = "gemini-3-flash-preview"
         self.model = chosen
         self._client: Any | None = None
@@ -202,7 +202,7 @@ class GeminiASRProvider(ASRProvider):
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
         candidate_models = [self.model]
-        for fallback in ("gemini-3-flash-preview", "gemini-3.8-flash", "gemini-flash-latest"):
+        for fallback in ("gemini-3-flash-preview", "gemini-3.5-flash"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
@@ -253,10 +253,12 @@ class GeminiASRProvider(ASRProvider):
             return False
         status = getattr(exc, "code", None) or getattr(exc, "status_code", None)
         if isinstance(status, int):
-            return status in (408, 429, 500, 502, 503, 504)
+            return status in (404, 408, 429, 500, 502, 503, 504)
         message = str(exc).lower()
-        if any(token in message for token in ("401", "403", "invalid api key", "permission", "not found", "404")):
+        if any(token in message for token in ("401", "403", "invalid api key", "permission")):
             return False
+        if any(token in message for token in ("not found", "404")):
+            return True
         return any(
             token in message
             for token in (

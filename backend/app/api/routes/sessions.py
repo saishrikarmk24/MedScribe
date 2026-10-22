@@ -58,10 +58,14 @@ async def create_session(payload: SessionCreate, db: DbSession, principal: Curre
         audio_source=payload.audio_source or _DEFAULT_AUDIO_SOURCE[payload.mode],
         ai_mode=settings.effective_ai_mode.value,
         model_name=(
-            payload.model_name
-            or (settings.gemini_model if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)
-                else (settings.local_llm_model if settings.effective_ai_mode.value in ("local", "ollama")
-                else "medscribe-rules-v1"))
+            "gemini-3-flash-preview"
+            if payload.model_name and "gemini" in payload.model_name.lower() and any(legacy in payload.model_name.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest"))
+            else (
+                payload.model_name
+                or (settings.gemini_model if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)
+                    else (settings.local_llm_model if settings.effective_ai_mode.value in ("local", "ollama")
+                    else "medscribe-rules-v1"))
+            )
         ),
         asr_provider=payload.asr_provider or (settings.asr_provider.value if hasattr(settings.asr_provider, "value") else str(settings.asr_provider)),
     )

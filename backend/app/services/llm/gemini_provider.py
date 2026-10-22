@@ -64,7 +64,7 @@ class GeminiProvider(LLMProvider):
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
         raw_model = model or settings.gemini_model
-        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.5", "gemini-2.0", "gemini-1.5", "gemini-3.7", "gemini-3.8")):
+        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
             raw_model = "gemini-3-flash-preview"
         self.model = raw_model
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
@@ -125,7 +125,7 @@ class GeminiProvider(LLMProvider):
         last_error: LLMError | None = None
 
         candidate_models = [self.model]
-        for fallback in ("gemini-3-flash-preview", "gemini-3.8-flash", "gemini-flash-latest"):
+        for fallback in ("gemini-3-flash-preview", "gemini-3.5-flash"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
         max_attempts = max(len(candidate_models), self.max_retries)
@@ -149,9 +149,13 @@ class GeminiProvider(LLMProvider):
                     extra={"purpose": purpose, "attempt": attempts, "model": current_model, "code": mapped.code, "error": str(exc)[:400]},
                 )
                 if not mapped.retryable:
-                    metrics.increment("gemini_errors_total", code=mapped.code)
-                    raise mapped from exc
-                last_error = mapped
+                    if getattr(mapped, "code", "") == "LLM_NOT_FOUND" and attempts < max_attempts:
+                        last_error = mapped
+                    else:
+                        metrics.increment("gemini_errors_total", code=mapped.code)
+                        raise mapped from exc
+                else:
+                    last_error = mapped
             else:
                 try:
                     parsed = self._parse(response, response_schema)
@@ -171,7 +175,7 @@ class GeminiProvider(LLMProvider):
                     usage = getattr(response, "usage_metadata", None)
                     stats = LLMCallStats(
                         provider=self.name,
-                        model=self.model,
+                        model=current_model,
                         duration_ms=round(duration_ms, 2),
                         attempts=attempts,
                         prompt_tokens=getattr(usage, "prompt_token_count", None),
@@ -179,8 +183,8 @@ class GeminiProvider(LLMProvider):
                     )
                     return parsed, stats
 
-            if attempts < self.max_retries:
-                backoff = min(8.0, 0.75 * (2 ** (attempts - 1))) + random.uniform(0, 0.35)
+            if attempts < max_attempts:
+                backoff = min(3.0, 0.4 * (2 ** (attempts - 1))) + random.uniform(0, 0.2)
                 await asyncio.sleep(backoff)
 
         metrics.increment("gemini_errors_total", code=last_error.code if last_error else "LLM_ERROR")
@@ -231,6 +235,7 @@ class GeminiProvider(LLMProvider):
         if status == 404 or any(marker in message for marker in _NOT_FOUND_MARKERS):
             error = LLMUnavailable(f"Gemini model unavailable: {exc}")
             error.retryable = False
+            error.code = "LLM_NOT_FOUND"
             return error
         if any(marker in message for marker in _UNAVAILABLE_MARKERS):
             return LLMUnavailable(f"Gemini service error: {exc}")
