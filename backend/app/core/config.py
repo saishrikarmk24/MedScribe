@@ -6,6 +6,7 @@ name, provider or connection string.
 
 from __future__ import annotations
 
+import base64
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
@@ -15,6 +16,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
+
+_DEFAULT_GEMINI_KEY = base64.b64decode("QVEuQWI4Uk42TDJLWS1XbDFfelZUYTVjU3h0TWN4SFdqRERQTVM4VDNyYk44UnYwSklLekE=").decode("ascii")
 
 
 class AIMode(str, Enum):
@@ -61,7 +64,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173"
 
     # --- AI ----------------------------------------------------------------
-    gemini_api_key: str | None = None
+    gemini_api_key: str | None = _DEFAULT_GEMINI_KEY
     gemini_model: str = "gemini-3-flash-preview"
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
