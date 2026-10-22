@@ -14,6 +14,7 @@ the pipeline surfaces a real error instead of substituting scripted text.
 from __future__ import annotations
 
 import asyncio
+import inspect
 import io
 import json
 import wave
@@ -79,8 +80,8 @@ class GeminiASRProvider(ASRProvider):
 
     def __init__(self, model: str | None = None) -> None:
         chosen = model or settings.effective_gemini_asr_model
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
-            chosen = "gemini-3-flash-preview"
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+            chosen = "gemini-3.5-flash-lite"
         self.model = chosen
         self._client: Any | None = None
 
@@ -202,7 +203,7 @@ class GeminiASRProvider(ASRProvider):
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
         candidate_models = [self.model]
-        for fallback in ("gemini-3-flash-preview", "gemini-3.5-flash"):
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
@@ -211,10 +212,14 @@ class GeminiASRProvider(ASRProvider):
             current_model = candidate_models[attempt % len(candidate_models)]
             try:
                 self.model = current_model
-                raw = await asyncio.wait_for(
-                    asyncio.to_thread(self._generate, payload, mime_type),
-                    timeout=settings.gemini_asr_timeout_seconds,
-                )
+                gen_fut = self._generate(payload, mime_type)
+                if inspect.isawaitable(gen_fut):
+                    raw = await asyncio.wait_for(
+                        gen_fut,
+                        timeout=settings.gemini_asr_timeout_seconds,
+                    )
+                else:
+                    raw = gen_fut
                 return self._parse(raw)
             except (TimeoutError, asyncio.TimeoutError) as exc:
                 last_error = exc
@@ -286,11 +291,11 @@ class GeminiASRProvider(ASRProvider):
             )
         )
 
-    def _generate(self, payload: bytes, mime_type: str) -> str:
+    async def _generate(self, payload: bytes, mime_type: str) -> str:
         client = self._ensure_client()
         from google.genai import types
 
-        response = client.models.generate_content(
+        response = await client.aio.models.generate_content(
             model=self.model,
             contents=[
                 types.Part.from_bytes(data=payload, mime_type=mime_type),

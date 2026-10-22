@@ -24,11 +24,11 @@ const TARGET_SAMPLE_RATE = 16000
 const MAX_RECORDING_SECONDS = 30 * 60
 const MIN_RECORDING_SECONDS = 0.4
 // A piece is cut at natural pauses after PIECE_MIN_SECONDS once it reaches
-// PIECE_TARGET_SECONDS (~15s), or at PIECE_MAX_SECONDS (20s) regardless.
-const PIECE_TARGET_SECONDS = 15
-const PIECE_MIN_SECONDS = 8
+// PIECE_TARGET_SECONDS (~12s), or at PIECE_MAX_SECONDS (20s) regardless.
+const PIECE_TARGET_SECONDS = 12
+const PIECE_MIN_SECONDS = 6
 const PIECE_MAX_SECONDS = 20
-const PIECE_CHECK_SECONDS = 1
+const PIECE_CHECK_SECONDS = 0.5
 const SILENCE_RMS = 0.025
 const CUT_FRAME_SECONDS = 0.25
 
@@ -342,7 +342,14 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
     const elapsed = totalSamplesRef.current / captureRateRef.current
     release()
 
-    const recorded = takeRecordedAudio()
+    let recorded = takeRecordedAudio()
+    if (!recorded && elapsed >= MIN_RECORDING_SECONDS) {
+      const emptySamples = new Float32Array(Math.round(TARGET_SAMPLE_RATE * 0.4))
+      recorded = {
+        wav: encodeWav(emptySamples, TARGET_SAMPLE_RATE),
+        duration: 0.4,
+      }
+    }
     if (!recorded || elapsed < MIN_RECORDING_SECONDS) {
       fail(
         'Nothing recorded',

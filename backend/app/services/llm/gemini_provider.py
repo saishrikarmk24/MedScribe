@@ -64,8 +64,8 @@ class GeminiProvider(LLMProvider):
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
         raw_model = model or settings.gemini_model
-        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
-            raw_model = "gemini-3-flash-preview"
+        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+            raw_model = "gemini-3.5-flash-lite"
         self.model = raw_model
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
         self.max_retries = max_retries or settings.gemini_max_retries
@@ -125,7 +125,7 @@ class GeminiProvider(LLMProvider):
         last_error: LLMError | None = None
 
         candidate_models = [self.model]
-        for fallback in ("gemini-3-flash-preview", "gemini-3.5-flash"):
+        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
         max_attempts = max(len(candidate_models), self.max_retries)

@@ -65,11 +65,11 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = _DEFAULT_GEMINI_KEY
-    gemini_model: str = "gemini-3-flash-preview"
+    gemini_model: str = "gemini-3.5-flash-lite"
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
-    gemini_update_interval_seconds: float = 4.0
+    gemini_update_interval_seconds: float = 3.0
     gemini_min_segments_per_update: int = 1
     gemini_timeout_seconds: float = 90.0
     gemini_max_retries: int = 2
@@ -119,8 +119,8 @@ class Settings(BaseSettings):
 
     # --- pipeline providers ------------------------------------------------
     # "auto" picks CUDA float16 when a GPU is present and CPU int8 otherwise.
-    asr_provider: ASRProviderName = ASRProviderName.GEMINI
-    diarization_provider: DiarizationProviderName = DiarizationProviderName.GEMINI
+    asr_provider: ASRProviderName = ASRProviderName.FASTER_WHISPER
+    diarization_provider: DiarizationProviderName = DiarizationProviderName.LOCAL
     faster_whisper_model: str = "large-v3-turbo"
     parakeet_model: str = "nvidia/parakeet-ctc-0.6b"
     asr_device: str = "auto"
@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     # Gemini audio transcription. The ASR model is configurable separately from
     # the structuring model because transcription is the more latency-sensitive
     # call and may warrant a cheaper/faster model.
-    gemini_asr_model: str | None = None
+    gemini_asr_model: str | None = "gemini-3.5-flash-lite"
     gemini_asr_timeout_seconds: float = 180.0
     gemini_asr_max_retries: int = 3
     asr_max_audio_bytes: int = 48 * 1024 * 1024
@@ -190,8 +190,8 @@ class Settings(BaseSettings):
     def _upgrade_legacy_gemini_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest")):
-                return "gemini-3-flash-preview"
+            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+                return "gemini-3.5-flash-lite"
         return value
 
     @field_validator("gemini_api_key", "huggingface_token", "local_llm_api_key", mode="before")

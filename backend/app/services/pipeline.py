@@ -460,9 +460,7 @@ class SessionPipeline:
                     GeminiTextSplitter,
                 )
                 items = [{"ref": seg.ref, "text": seg.text} for seg in assembled]
-                splits = await GeminiTextSplitter().split(items) if settings.gemini_configured else {}
-                if not splits:
-                    splits = ClinicalTextSplitter().split(items, previous_role=runtime.last_text_role)
+                splits = ClinicalTextSplitter().split(items, previous_role=runtime.last_text_role)
                 if splits:
                     runtime.last_text_role = splits.get(assembled[-1].ref, runtime.last_text_role)
                     for seg in assembled:

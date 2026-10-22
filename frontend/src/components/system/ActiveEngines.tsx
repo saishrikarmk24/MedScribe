@@ -80,7 +80,7 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
   let asrTone: Tone = asr.mock ? 'bad' : asr.loaded ? 'ok' : 'idle'
 
   if (isGeminiASR) {
-    asrValue = asr.model ? `Google Gemini Multimodal Audio (${asr.model})` : 'Google Gemini Multimodal Audio (gemini-3-flash-preview)'
+    asrValue = asr.model ? `Google Gemini Multimodal Audio (${asr.model})` : 'Google Gemini Multimodal Audio (gemini-3.5-flash-lite)'
     asrBadge = 'Cloud Audio'
     asrTone = 'ok'
   } else if (asr.model) {
