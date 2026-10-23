@@ -64,7 +64,7 @@ export function NewSessionPage() {
         faculty_name: null,
         mode: 'MICROPHONE',
         audio_source: 'MICROPHONE',
-        model_name: 'gemini-3.8-flash',
+        model_name: 'gemini-3.5-flash-lite',
         asr_provider: 'gemini',
       })
       if (autoStart) {
@@ -72,7 +72,7 @@ export function NewSessionPage() {
         pushToast({
           kind: 'success',
           title: `${session.reference} started`,
-          detail: status?.ai?.model ? `Note model: ${status.ai.model}` : 'Google Gemini 3.8 Flash active',
+          detail: status?.ai?.model ? `Note model: ${status.ai.model}` : 'Google Gemini 3.5 Flash Lite active',
         })
       } else {
         pushToast({ kind: 'success', title: `${session.reference} created` })

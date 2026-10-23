@@ -39,8 +39,8 @@ def build_llm_provider(model_name: str | None = None) -> LLMProvider:
     )
     target_model = model_name or default_model
     target_lower = target_model.lower()
-    if "gemini" in target_lower and any(legacy in target_lower for legacy in ("gemini-2.0", "gemini-1.5", "latest", "gemini-3-flash-preview")):
-        target_model = "gemini-3.8-flash"
+    if "gemini" in target_lower and any(legacy in target_lower for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+        target_model = "gemini-3.5-flash-lite"
         target_lower = target_model.lower()
 
     # Mock mode and sessions pinned to the rule engine must never reach a real model:

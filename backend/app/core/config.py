@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = _DEFAULT_GEMINI_KEY
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.5-flash-lite"
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
@@ -190,8 +190,8 @@ class Settings(BaseSettings):
     def _upgrade_legacy_gemini_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.0", "gemini-1.5", "latest", "gemini-3-flash-preview")):
-                return "gemini-3.8-flash"
+            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+                return "gemini-3.5-flash-lite"
         return value
 
     @field_validator("gemini_asr_model", mode="before")
