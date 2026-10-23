@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = _DEFAULT_GEMINI_KEY
-    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_model: str = "gemini-3.8-flash"
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
@@ -185,12 +185,21 @@ class Settings(BaseSettings):
             return AIMode.GEMINI.value
         return value
 
-    @field_validator("gemini_model", "gemini_asr_model", mode="before")
+    @field_validator("gemini_model", mode="before")
     @classmethod
     def _upgrade_legacy_gemini_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
+            if any(legacy in val_clean for legacy in ("gemini-2.0", "gemini-1.5", "latest", "gemini-3-flash-preview")):
+                return "gemini-3.8-flash"
+        return value
+
+    @field_validator("gemini_asr_model", mode="before")
+    @classmethod
+    def _upgrade_legacy_gemini_asr_models(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip():
+            val_clean = value.strip().lower()
+            if any(legacy in val_clean for legacy in ("gemini-2.0", "gemini-1.5", "latest", "gemini-3-flash-preview")):
                 return "gemini-3.5-flash-lite"
         return value
 
