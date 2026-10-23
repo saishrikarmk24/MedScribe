@@ -125,10 +125,10 @@ class GeminiProvider(LLMProvider):
         last_error: LLMError | None = None
 
         candidate_models = [self.model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
+        for fallback in ("gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
-        max_attempts = max(len(candidate_models), self.max_retries)
+        max_attempts = self.max_retries
 
         while attempts < max_attempts:
             current_model = candidate_models[attempts % len(candidate_models)]

@@ -203,11 +203,11 @@ class GeminiASRProvider(ASRProvider):
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
         candidate_models = [self.model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
+        for fallback in ("gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3-flash-preview"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
-        max_attempts = max(len(candidate_models), settings.gemini_asr_max_retries)
+        max_attempts = max(settings.gemini_asr_max_retries, 1)
         for attempt in range(max_attempts):
             current_model = candidate_models[attempt % len(candidate_models)]
             try:
