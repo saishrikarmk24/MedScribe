@@ -17,6 +17,7 @@ import asyncio
 import inspect
 import io
 import json
+import re
 import wave
 from typing import Any
 
@@ -341,22 +342,75 @@ class GeminiASRProvider(ASRProvider):
         text = (raw or "").strip()
         if not text:
             return []
-        if text.startswith("```"):
-            text = text.strip("`")
-            if text.lower().startswith("json"):
-                text = text[4:]
-            text = text.strip()
+
+        # Strip code block fences or thinking tags
+        text = re.sub(r"<(?:think|thought)>.*?</(?:think|thought)>", "", text, flags=re.DOTALL).strip()
+        if "```" in text:
+            parts = text.split("```")
+            for part in parts:
+                trimmed = part.strip()
+                if trimmed.lower().startswith("json"):
+                    trimmed = trimmed[4:].strip()
+                if trimmed.startswith("{") or trimmed.startswith("["):
+                    text = trimmed
+                    break
+
+        # Find outer JSON boundaries
+        start_brace = text.find("{")
+        start_bracket = text.find("[")
+        if start_brace != -1 and (start_bracket == -1 or start_brace < start_bracket):
+            end = text.rfind("}")
+            if end > start_brace:
+                text = text[start_brace : end + 1]
+        elif start_bracket != -1:
+            end = text.rfind("]")
+            if end > start_bracket:
+                text = text[start_bracket : end + 1]
+
+        data = None
+        # Pass 1: standard json.loads with strict=False (allows unescaped control characters in text)
         try:
-            data = json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise GeminiASRUnavailable(f"Gemini returned a non-JSON transcript: {text[:200]}") from exc
-        if isinstance(data, list):
-            turns = data
-        elif isinstance(data, dict):
-            turns = data.get("turns") or []
+            data = json.loads(text, strict=False)
+        except Exception:
+            # Pass 2: clean control characters
+            cleaned = re.sub(r"[\x00-\x1f\x7f-\x9f]", lambda m: "\n" if m.group(0) == "\n" else " ", text)
+            try:
+                data = json.loads(cleaned, strict=False)
+            except Exception:
+                pass
+
+        # Pass 3: Regex turn extraction if JSON parse failed
+        if data is None:
+            turns_regex = []
+            pattern = re.compile(r'\{\s*"speaker"\s*:\s*"([^"]+)"\s*,\s*"text"\s*:\s*"([^"]+)"', re.DOTALL)
+            for match in pattern.finditer(raw):
+                speaker, utt_text = match.groups()
+                turns_regex.append({"speaker": speaker, "text": utt_text, "start": 0.0, "end": 1.0, "confidence": 0.9})
+            if turns_regex:
+                return turns_regex
+            raise GeminiASRUnavailable(f"Gemini returned an invalid transcript: {text[:200]}")
+
+        # Recursively unpack nested turns (e.g. {"turns": [[{"speaker": ...}]]})
+        def _flatten(items: Any) -> list[dict[str, Any]]:
+            out = []
+            if isinstance(items, dict):
+                if "speaker" in items or "text" in items:
+                    out.append(items)
+                elif "turns" in items:
+                    out.extend(_flatten(items["turns"]))
+            elif isinstance(items, list):
+                for x in items:
+                    out.extend(_flatten(x))
+            return out
+
+        if isinstance(data, dict):
+            raw_turns = data.get("turns", data)
+        elif isinstance(data, list):
+            raw_turns = data
         else:
             return []
-        return [turn for turn in turns if isinstance(turn, dict)]
+
+        return [t for t in _flatten(raw_turns) if isinstance(t, dict) and t.get("text")]
 
     @staticmethod
     def _turn_bounds(
