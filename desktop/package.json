@@ -1,0 +1,39 @@
+{
+  "name": "sims-voicescribe-desktop",
+  "version": "1.0.0",
+  "description": "SIMS VoiceScribe AI - Ambient Clinical Documentation Workstation",
+  "main": "main.cjs",
+  "author": "SIMS Hospital & SRMIST",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "in.hospital.sims.voicescribe",
+    "productName": "SIMS VoiceScribe AI",
+    "copyright": "Copyright © 2026 SRMIST & SIMS Hospital",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "../frontend/public/sims-icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SIMS VoiceScribe AI"
+    }
+  }
+}

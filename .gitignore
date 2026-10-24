@@ -27,6 +27,8 @@ graphify-out/
 
 # --- node / frontend ---------------------------------------------------------
 node_modules/
+desktop/node_modules/
+desktop/dist-electron/
 frontend/.vite/
 *.tsbuildinfo
 npm-debug.log*
