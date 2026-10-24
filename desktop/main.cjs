@@ -12,22 +12,40 @@ let backendProcess = null
 let isQuitting = false
 
 function findPythonExecutable() {
-  const venvPython = path.resolve(__dirname, '..', 'backend', '.venv', 'Scripts', 'python.exe')
   const fs = require('fs')
+  if (process.resourcesPath) {
+    const packagedVenv = path.resolve(process.resourcesPath, 'backend', '.venv', 'Scripts', 'python.exe')
+    if (fs.existsSync(packagedVenv)) {
+      return packagedVenv
+    }
+  }
+  const venvPython = path.resolve(__dirname, '..', 'backend', '.venv', 'Scripts', 'python.exe')
   if (fs.existsSync(venvPython)) {
     return venvPython
   }
   return process.platform === 'win32' ? 'python.exe' : 'python3'
 }
 
+function findBackendScript() {
+  const fs = require('fs')
+  if (process.resourcesPath) {
+    const packagedScript = path.resolve(process.resourcesPath, 'backend', 'desktop_runner.py')
+    if (fs.existsSync(packagedScript)) {
+      return packagedScript
+    }
+  }
+  return path.resolve(__dirname, 'desktop_runner.py')
+}
+
 function startBackend() {
   const pythonExe = findPythonExecutable()
-  const scriptPath = path.resolve(__dirname, 'desktop_runner.py')
+  const scriptPath = findBackendScript()
+  const runDir = path.dirname(scriptPath)
 
-  console.log(`[SIMS Desktop] Spawning micro-backend with: ${pythonExe}`)
+  console.log(`[SIMS Desktop] Spawning micro-backend with: ${pythonExe} at ${scriptPath}`)
 
   backendProcess = spawn(pythonExe, [scriptPath], {
-    cwd: path.resolve(__dirname),
+    cwd: runDir,
     env: { ...process.env, PYTHONUNBUFFERED: '1' },
     windowsHide: true,
     stdio: 'ignore'

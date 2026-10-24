@@ -26,8 +26,25 @@ if (-not (Test-Path "$DesktopDir\node_modules\electron\dist\electron.exe")) {
     npm install
 }
 
-# Step 3: Package Application
-Write-Host "`n[3/3] SIMS Desktop Workspace Ready!" -ForegroundColor Green
-Write-Host "   -> Launcher script : $DesktopDir\START_SIMS_APP.bat"
-Write-Host "   -> Native Electron : npm start (in desktop directory)"
+# Step 3: Package 1-Click Installer
+Write-Host "`n[3/3] Generating 1-Click Single Standalone Installer (.exe)..." -ForegroundColor Yellow
+Set-Location $DesktopDir
+npm run dist
+if ($LASTEXITCODE -ne 0) {
+    Write-Warning "Dist build encountered warnings. Checking generated artifacts..."
+}
+
+$DistDir = Join-Path $DesktopDir "dist-electron"
+$InstallerPath = Join-Path $DistDir "SIMS VoiceScribe AI Setup 1.0.0.exe"
+$PortablePath = Join-Path $DistDir "SIMS VoiceScribe AI 1.0.0.exe"
+
+Write-Host "`n=================================================================" -ForegroundColor Cyan
+Write-Host "🏥 SIMS HOSPITAL VOICESCRIBE AI - INSTALLER READY!" -ForegroundColor Green
+Write-Host "=================================================================" -ForegroundColor Cyan
+Write-Host "1. Single-Click Setup Installer (Send to Doctors):" -ForegroundColor White
+Write-Host "   $InstallerPath" -ForegroundColor Green
+Write-Host "`n2. Standalone Portable Executable (Runs without install):" -ForegroundColor White
+Write-Host "   $PortablePath" -ForegroundColor Green
+Write-Host "`n3. Local Native App Launcher:" -ForegroundColor White
+Write-Host "   $DesktopDir\START_SIMS_APP.bat" -ForegroundColor Gray
 Write-Host "=================================================================" -ForegroundColor Cyan

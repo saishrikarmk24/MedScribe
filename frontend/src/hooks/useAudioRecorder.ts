@@ -24,10 +24,11 @@ const TARGET_SAMPLE_RATE = 16000
 const MAX_RECORDING_SECONDS = 30 * 60
 const MIN_RECORDING_SECONDS = 0.4
 // A piece is cut at natural pauses after PIECE_MIN_SECONDS once it reaches
-// PIECE_TARGET_SECONDS (~12s), or at PIECE_MAX_SECONDS (20s) regardless.
-const PIECE_TARGET_SECONDS = 12
-const PIECE_MIN_SECONDS = 6
-const PIECE_MAX_SECONDS = 20
+// PIECE_TARGET_SECONDS (~8s), or at PIECE_MAX_SECONDS (12s) regardless.
+// Smaller slices transcribe via Gemini ASR in ~1s, streaming live speech to screen.
+const PIECE_TARGET_SECONDS = 8
+const PIECE_MIN_SECONDS = 4
+const PIECE_MAX_SECONDS = 12
 const PIECE_CHECK_SECONDS = 0.5
 const SILENCE_RMS = 0.025
 const CUT_FRAME_SECONDS = 0.25

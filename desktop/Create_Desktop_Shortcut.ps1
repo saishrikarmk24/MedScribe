@@ -3,13 +3,16 @@ $DesktopPath = [Environment]::GetFolderPath("Desktop")
 $ShortcutFile = Join-Path $DesktopPath "SIMS VoiceScribe AI.lnk"
 $TargetDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TargetBat = Join-Path $TargetDir "START_SIMS_APP.bat"
-$IconFile = Join-Path (Split-Path -Parent $TargetDir) "frontend\public\sims-icon.png"
+$IconFile = Join-Path (Split-Path -Parent $TargetDir) "frontend\public\sims-icon.ico"
 
 $WshShell = New-Object -ComObject WScript.Shell
 $Shortcut = $WshShell.CreateShortcut($ShortcutFile)
 $Shortcut.TargetPath = $TargetBat
 $Shortcut.WorkingDirectory = $TargetDir
 $Shortcut.Description = "SIMS VoiceScribe AI - Ambient Clinical Documentation Workstation"
+if (Test-Path $IconFile) {
+    $Shortcut.IconLocation = $IconFile
+}
 $Shortcut.Save()
 
 Write-Host "✅ Desktop shortcut created: $ShortcutFile" -ForegroundColor Green

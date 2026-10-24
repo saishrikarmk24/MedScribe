@@ -14,7 +14,12 @@ from pathlib import Path
 # Set repository root so Python finds app.* modules
 DESKTOP_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DESKTOP_DIR.parent
-BACKEND_DIR = REPO_ROOT / "backend"
+if (DESKTOP_DIR / "app").is_dir():
+    BACKEND_DIR = DESKTOP_DIR
+elif (REPO_ROOT / "backend").is_dir():
+    BACKEND_DIR = REPO_ROOT / "backend"
+else:
+    BACKEND_DIR = DESKTOP_DIR
 
 sys.path.insert(0, str(BACKEND_DIR))
 os.chdir(str(BACKEND_DIR))
@@ -23,6 +28,7 @@ os.chdir(str(BACKEND_DIR))
 from dotenv import load_dotenv
 
 load_dotenv(BACKEND_DIR / ".env")
+load_dotenv(DESKTOP_DIR / ".env")
 load_dotenv(REPO_ROOT / ".env")
 os.environ["GEMINI_MODEL"] = "gemini-3.5-flash-lite"
 os.environ["GEMINI_ASR_MODEL"] = "gemini-3.5-flash-lite"
@@ -33,8 +39,8 @@ os.environ["ENVIRONMENT"] = "production"
 os.environ["DEV_AUTH_ENABLED"] = "true"
 os.environ["ALLOW_SQLITE_FALLBACK"] = "true"
 os.environ["CORS_ORIGINS"] = "*"
-os.environ["GEMINI_UPDATE_INTERVAL_SECONDS"] = "3.0"
-os.environ["GEMINI_MIN_SEGMENTS_PER_UPDATE"] = "1"
+os.environ["GEMINI_UPDATE_INTERVAL_SECONDS"] = "10.0"
+os.environ["GEMINI_MIN_SEGMENTS_PER_UPDATE"] = "4"
 os.environ["LOG_LEVEL"] = "WARNING"
 
 # --- Dedicated Hospital Storage Directory ---

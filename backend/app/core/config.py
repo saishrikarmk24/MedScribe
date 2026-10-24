@@ -69,8 +69,8 @@ class Settings(BaseSettings):
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
-    gemini_update_interval_seconds: float = 3.0
-    gemini_min_segments_per_update: int = 1
+    gemini_update_interval_seconds: float = 10.0
+    gemini_min_segments_per_update: int = 4
     gemini_timeout_seconds: float = 90.0
     gemini_max_retries: int = 2
     gemini_temperature: float = 0.1
