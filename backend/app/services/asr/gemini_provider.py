@@ -24,6 +24,7 @@ from typing import Any
 from app.core.config import settings
 from app.core.logging import get_logger, track_duration
 from app.services.asr.base import ASRProvider, ASRUnavailable
+from app.services.llm.gemini_request import gemini_generation_kwargs, gemini_model_chain
 from app.services.types import ASRSegment, AudioFrame, DiarizationTurn
 
 logger = get_logger(__name__)
@@ -63,8 +64,13 @@ Transcribe the clinical encounter audio VERBATIM with extreme precision:
   * For English words or clinical brand names spoken inside Tamil or English speech, write standard English (e.g. fever, headache, weakness, fatigue, cough, cold, chest pain, body pain).
 - Indian pharmaceutical and clinical terms: Accurately capture medicines, dosages, and vitals (e.g. Dolo 650, Calpol, Paracetamol, Combiflam, Pan-D, Pantocid, Omez, Rantac, Augmentin, Azithral, Montair-LC, Allegra, Cetirizine, Sinarest, Cheston Cold, Ascoril, Benadryl, Electral, Telma 40, Amlong, Cilacar, Metformin 500, Glycomet, Shelcal, Becosules, Neurobion, Volini, Moov, BP, Sugar, CBC, ECG, X-Ray).
 - Speaker turn segmentation:
-  * Separate the audio into distinct turns per speaker.
-  * Label speakers consistently as speaker_0, speaker_1 (typically speaker_0 for doctor, speaker_1 for patient).
+  * Separate the audio only when a different person actually starts speaking.
+  * Never change speaker in the middle of a sentence. "I have taken / Dolo 650 twice daily / but the improvement..." is ONE speaker.
+  * speaker_0 is not automatically the doctor. Decide from the words.
+  * The patient greets ("hello doctor"), reports symptoms, and says "I have / I took / I have been / I have taken".
+  * A medicine name does not make the speaker the doctor. "I have taken Dolo 650" is the patient. "Take Dolo 650 twice daily" is the doctor.
+  * The doctor asks questions and gives instructions.
+  * Label speakers as speaker_0 and speaker_1, and keep each person on the same id for this whole clip.
   * start and end are seconds relative to the start of THIS audio clip.
   * confidence is between 0.0 and 1.0.
 - If the audio contains no intelligible speech, return {"turns": []}.
@@ -83,10 +89,7 @@ class GeminiASRProvider(ASRProvider):
     is_mock = False
 
     def __init__(self, model: str | None = None) -> None:
-        chosen = model or settings.effective_gemini_asr_model
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-1.", "gemini-2.0")):
-            chosen = "gemini-3.7-flash"
-        self.model = chosen
+        self.model = gemini_model_chain(model or settings.effective_gemini_asr_model)[0]
         self._client: Any | None = None
 
     # ---------------------------------------------------------------- client
@@ -206,12 +209,8 @@ class GeminiASRProvider(ASRProvider):
 
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
-        candidate_models = [self.model]
-        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
-            if fallback not in candidate_models:
-                candidate_models.append(fallback)
-
-        max_attempts = max(settings.gemini_asr_max_retries, 1)
+        candidate_models = gemini_model_chain(self.model)
+        max_attempts = max(settings.gemini_asr_max_retries, len(candidate_models))
         for attempt in range(max_attempts):
             current_model = candidate_models[attempt % len(candidate_models)]
             try:
@@ -299,15 +298,7 @@ class GeminiASRProvider(ASRProvider):
         client = self._ensure_client()
         from google.genai import types
 
-        gen_kwargs: dict[str, Any] = {
-            "response_mime_type": "application/json",
-            "temperature": 0.0,
-        }
-        if "3.7" in self.model or "2.5" in self.model or "3.8" in self.model:
-            try:
-                gen_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-            except Exception:
-                pass
+        gen_kwargs = gemini_generation_kwargs(self.model, max_output_tokens=2048, json_mode=True)
 
         response = await client.aio.models.generate_content(
             model=self.model,

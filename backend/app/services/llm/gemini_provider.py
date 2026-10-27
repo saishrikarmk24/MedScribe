@@ -52,6 +52,7 @@ from app.services.llm.prompts import (
     build_extraction_prompt,
     build_note_prompt,
 )
+from app.services.llm.gemini_request import gemini_generation_kwargs, gemini_model_chain
 from app.services.llm.json_parse import extract_json_object
 from app.services.llm.schemas import ClinicalBundle, ExtractionResult, NoteUpdate, coerce_llm_payload
 
@@ -76,10 +77,7 @@ class GeminiProvider(LLMProvider):
         temperature: float | None = None,
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
-        raw_model = model or settings.gemini_model
-        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-1.", "gemini-2.0")):
-            raw_model = "gemini-3.7-flash"
-        self.model = raw_model
+        self.model = gemini_model_chain(model or settings.gemini_model)[0]
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
         self.max_retries = max_retries or settings.gemini_max_retries
         self.temperature = settings.gemini_temperature if temperature is None else temperature
@@ -122,22 +120,14 @@ class GeminiProvider(LLMProvider):
     def _config(response_schema: Any, model_name: str = "") -> Any:
         from google.genai import types  # noqa: PLC0415
 
-        kwargs: dict[str, Any] = {
-            "system_instruction": SYSTEM_INSTRUCTION,
-            "temperature": settings.gemini_temperature,
-            "response_mime_type": "application/json",
-            "response_schema": response_schema,
-            "candidate_count": 1,
-            "max_output_tokens": 3072,
-        }
-        target = (model_name or settings.gemini_model).lower()
-        if "3.7" in target or "2.5" in target or "3.8" in target:
-            try:
-                kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
-            except Exception:
-                pass
-
-        return types.GenerateContentConfig(**kwargs)
+        return types.GenerateContentConfig(
+            **gemini_generation_kwargs(
+                model_name or settings.gemini_model,
+                system_instruction=SYSTEM_INSTRUCTION,
+                response_schema=response_schema,
+                max_output_tokens=8192,
+            )
+        )
 
     # ------------------------------------------------------------------- calls
     async def _generate(self, prompt: str, response_schema: Any, *, purpose: str) -> tuple[Any, LLMCallStats]:
@@ -147,11 +137,8 @@ class GeminiProvider(LLMProvider):
         started = time.perf_counter()
         last_error: LLMError | None = None
 
-        candidate_models = [self.model]
-        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
-            if fallback not in candidate_models:
-                candidate_models.append(fallback)
-        max_attempts = self.max_retries
+        candidate_models = gemini_model_chain(self.model)
+        max_attempts = max(self.max_retries, len(candidate_models))
 
         while attempts < max_attempts:
             current_model = candidate_models[attempts % len(candidate_models)]
@@ -283,11 +270,20 @@ class GeminiProvider(LLMProvider):
             section = getattr(result.note, key, None)
             if not section or not section.text or section.source_segment_ids:
                 continue
-            words = set(re.findall(r"\w{4,}", section.text.lower())) - stop
+            words = set(re.findall(r"\w{4,}", expand_clinical_text(section.text).lower())) - stop
             refs = [ref for ref, text in seg_dict.items() if any(word in text for word in words)]
             if key in ("assessment", "plan", "follow_up"):
                 doctor_refs = [ref for ref in refs if roles.get(ref) == "DOCTOR"]
                 refs = doctor_refs or refs
+            # The grounding pass already removed text the transcript does not support.
+            # A section that survived that pass still needs a real segment id, or the
+            # review screen blocks approval for a missing citation.
+            if not refs:
+                pool = list(seg_dict)
+                if key in ("assessment", "plan", "follow_up"):
+                    doctor_pool = [ref for ref in pool if roles.get(ref) == "DOCTOR"]
+                    pool = doctor_pool or pool
+                refs = pool[:3]
             section.source_segment_ids = refs[:8]
 
     async def _generate_single_pass(self, prompt: str, *, purpose: str = "single_pass") -> tuple[str, LLMCallStats]:
@@ -295,22 +291,19 @@ class GeminiProvider(LLMProvider):
         from google.genai import types  # noqa: PLC0415
 
         config = types.GenerateContentConfig(
-            system_instruction=LOCAL_SYSTEM_INSTRUCTION,
-            temperature=self.temperature,
-            response_mime_type="application/json",
-            response_schema=ClinicalBundle,
-            candidate_count=1,
-            max_output_tokens=3072,
+            **gemini_generation_kwargs(
+                self.model,
+                system_instruction=LOCAL_SYSTEM_INSTRUCTION,
+                response_schema=ClinicalBundle,
+                max_output_tokens=8192,
+            )
         )
         started = time.perf_counter()
-        candidate_models = [self.model]
-        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
-            if fallback not in candidate_models:
-                candidate_models.append(fallback)
+        candidate_models = gemini_model_chain(self.model)
 
         attempts = 0
         last_error: LLMError | None = None
-        while attempts < self.max_retries:
+        while attempts < max(self.max_retries, len(candidate_models)):
             current_model = candidate_models[attempts % len(candidate_models)]
             attempts += 1
             try:

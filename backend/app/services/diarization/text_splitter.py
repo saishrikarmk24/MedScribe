@@ -17,6 +17,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.models.enums import SpeakerRole
 
 logger = get_logger(__name__)
 
@@ -25,7 +26,8 @@ _DOCTOR_CUES = (
     r"\bhow long\b", r"\bsince when\b", r"\bwhen did\b", r"\bwhere (?:is|does)\b", r"\bdo you\b",
     r"\bare you\b", r"\bhave you\b", r"\bdid you\b", r"\bany (?:fever|vomiting|pain|history|allergy|allergies)\b",
     r"\btell me\b", r"\blet me (?:check|examine|see)\b", r"\bopen your\b", r"\bbreathe\b", r"\blie down\b",
-    r"\bi(?:'ll| will) (?:prescribe|give|write|start)\b", r"\btake (?:this|the|one|two|tab)\b",
+    r"\bi(?:'ll| will) (?:prescribe|give|write|start)\b", r"\btake (?:this|the|one|two|tab|dolo)\b",
+    r"\b(?:continue|start) (?:dolo|this|the|tab|tablet)\b",
     r"\b(?:get|do) (?:a|an|the)? ?(?:blood test|cbc|x-ray|scan|ecg|mri|ct)\b", r"\bcome back\b",
     r"\breview (?:after|in)\b", r"\bfollow[- ]up\b", r"\bdrink (?:plenty|more)\b",
     # Hindi / Hinglish
@@ -36,9 +38,11 @@ _DOCTOR_CUES = (
     r"\benni rojul", r"\bemaindi\b", r"\bekkada noppi\b", r"\bcheppandi\b",
 )
 _PATIENT_CUES = (
-    r"\bi (?:have|had|feel|felt|took|am taking|get|got|can't|cannot|don't|do not)\b",
+    r"\bi (?:have|had|feel|felt|took|am taking|have taken|have been|get|got|can't|cannot|don't|do not)\b",
     r"\bi've been\b", r"\bi'm having\b",
+    r"\b(?:hello|hi|hey)\s+doctor\b",
     r"\bmy (?:head|stomach|chest|back|leg|body|throat)\b", r"\bsince (?:\d+|two|three|four|five|last|yesterday)\b",
+    r"\bfor (?:the )?past\b",
     r"\bit (?:hurts|started|pains|comes)\b", r"\b(?:yes|no),? doctor\b",
     r"\bdoctor(?: sahab| garu| sir| madam)?,", r"\bdoctor (?:sahab|garu)\b",
     # Hindi
@@ -56,11 +60,7 @@ _ACK_RE = re.compile(
     r"haan|sari|seri|sare|avunu|mm+)\W*$",
     re.IGNORECASE,
 )
-_MEDICAL_TERM_RE = re.compile(
-    r"\b(?:prescribe|tablet|tab|mg|dose|twice|thrice|daily|investigation|diagnos\w*|examin\w*|"
-    r"blood pressure|bp|pulse|spo2|temperature|antibiotic|x-ray|scan|report)\b",
-    re.IGNORECASE,
-)
+# A medicine name is not a doctor cue. Patients say "I have taken Dolo 650 twice daily".
 
 
 class ClinicalTextSplitter:
@@ -72,8 +72,10 @@ class ClinicalTextSplitter:
         if not clean:
             return 0.0
         doctor = len(_DOCTOR_RE.findall(clean)) * 1.0 + clean.count("?") * 1.5
-        doctor += 0.3 * len(_MEDICAL_TERM_RE.findall(clean))
         patient = len(_PATIENT_RE.findall(clean)) * 1.0
+        # "Hello doctor" and "I have taken ..." are the patient even if a drug name follows.
+        if patient and re.search(r"\b(?:hello|hi|hey)\s+doctor\b|\bi (?:have taken|took|have been|am taking)\b", clean, re.IGNORECASE):
+            patient += 1.0
         return doctor - patient
 
     def split(self, segments: list[dict], previous_role: str | None = None) -> dict[str, str]:
@@ -104,8 +106,82 @@ class ClinicalTextSplitter:
             last = role
         return result
 
+
+def _sentence_is_open(text: str) -> bool:
+    """True when the next fragment is still this speaker finishing the thought."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return False
+    if stripped.endswith(("?", "!")):
+        return False
+    if stripped.endswith("."):
+        return False
+    return True
+
+
+def _same_thought(previous: str, current: str) -> bool:
+    """An unfinished line and its continuation are one person, even if ASR switched speaker."""
+    if not previous or not current:
+        return False
+    if not _sentence_is_open(previous):
+        return False
+    # A real question is a new turn, not the tail of the previous sentence.
+    if current.rstrip().endswith("?") and _DOCTOR_RE.search(current) and not _PATIENT_RE.search(current):
+        return False
+    return True
+
+
+def repair_turn_speakers(segments: list, *, previous_role: str | None = None, previous_text: str | None = None) -> tuple[list, str | None, str | None]:
+    """Give each turn to the doctor or the patient from what was said.
+
+    Audio diarization on short clips swaps speaker ids and splits one sentence
+    across both people. A medicine name must not do that: "I have taken Dolo
+    650 twice daily" is the patient. Unfinished sentences stay with the person
+    who started them. ``speaker_0`` is the doctor and ``speaker_1`` is the patient.
+    """
+    splitter = ClinicalTextSplitter()
+    repaired: list = []
+    last = previous_role
+    prev_text = previous_text or ""
+
+    for seg in segments:
+        text = str(getattr(seg, "text", "") or "").strip()
+        if not text:
+            continue
+        score = splitter.score(text)
+        if last and _same_thought(prev_text, text):
+            role = last
+        elif score >= 1.0:
+            role = "doctor"
+        elif score <= -1.0:
+            role = "patient"
+        elif last == "doctor":
+            role = "doctor" if score > 0 or _ACK_RE.match(text) else "patient"
+        elif last == "patient":
+            role = "doctor" if score > 0 or _ACK_RE.match(text) else "patient"
+        else:
+            role = "doctor" if score > 0 or _ACK_RE.match(text) else "patient"
+
+        if repaired and role == last and _same_thought(repaired[-1].text, text):
+            previous = repaired[-1]
+            previous.text = f"{previous.text} {text}".strip()
+            if getattr(seg, "end_time", None) is not None:
+                previous.end_time = seg.end_time
+            prev_text = previous.text
+            last = role
+            continue
+
+        seg.speaker_label = "speaker_0" if role == "doctor" else "speaker_1"
+        seg.role = SpeakerRole.DOCTOR if role == "doctor" else SpeakerRole.PATIENT
+        repaired.append(seg)
+        last = role
+        prev_text = text
+
+    return repaired, last, prev_text
+
+
 # Fast, reliable model for turn splitting text classification.
-_DEFAULT_MODEL = "gemini-3.7-flash"
+_DEFAULT_MODEL = "gemini-3.8-flash"
 
 
 class GeminiTextSplitter:
@@ -130,10 +206,9 @@ class GeminiTextSplitter:
     )
 
     def __init__(self, *, model: str | None = None) -> None:
-        chosen = model or _DEFAULT_MODEL
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
-            chosen = "gemini-3.7-flash"
-        self._model = chosen
+        from app.services.llm.gemini_request import canonical_gemini_model
+
+        self._model = canonical_gemini_model(model or settings.gemini_model or _DEFAULT_MODEL)
         self._client: Any | None = None
 
     # ------------------------------------------------------------------ client
@@ -215,10 +290,9 @@ class GeminiTextSplitter:
 
         try:
             client = self._ensure_client()
-            models_to_try = [self._model]
-            for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3-flash-preview"):
-                if fallback not in models_to_try:
-                    models_to_try.append(fallback)
+            from app.services.llm.gemini_request import gemini_model_chain
+
+            models_to_try = gemini_model_chain(self._model)
 
             raw = ""
             for m in models_to_try:

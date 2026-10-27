@@ -3,6 +3,8 @@ import {
   checkServerHealth,
   fetchBeaconServerUrl,
   getServerBaseUrl,
+  isLocalDemoHost,
+  setServerBaseUrl,
   subscribeServerUrl,
 } from '@/services/serverConfig'
 
@@ -33,25 +35,34 @@ export function useServerStatus() {
     setIsChecking(true)
 
     try {
-      // If deployed on Vercel and no manual targetUrl is specified, always sync latest beacon
+      const localDemo = typeof window !== 'undefined' && isLocalDemoHost()
+      // The hosted site has no backend of its own, so it may follow a healthy Kaggle tunnel.
+      // A local demo must not: a failed health check used to replace localhost with a dead tunnel.
       const isVercel = typeof window !== 'undefined' && window.location.origin.includes('vercel.app')
-      if (isVercel && !targetUrl) {
-        const beaconUrl = await fetchBeaconServerUrl(true)
+      if (isVercel && !targetUrl && !localDemo) {
+        const beaconUrl = await fetchBeaconServerUrl()
         if (beaconUrl) {
-          setServerUrlState(beaconUrl)
+          const beaconHealth = await checkServerHealth(beaconUrl, 6000)
+          if (beaconHealth.ok) {
+            setServerBaseUrl(beaconUrl)
+            setServerUrlState(beaconUrl)
+          }
         }
       }
 
       let activeUrl = targetUrl || getServerBaseUrl()
       let res = await checkServerHealth(activeUrl, 6000)
 
-      // If activeUrl is failing, refresh from beacon
-      if (!res.ok) {
-        const discovered = await fetchBeaconServerUrl(true)
+      if (!res.ok && !localDemo) {
+        const discovered = await fetchBeaconServerUrl()
         if (discovered && discovered !== activeUrl) {
-          activeUrl = discovered
-          setServerUrlState(discovered)
-          res = await checkServerHealth(discovered, 6000)
+          const discoveredHealth = await checkServerHealth(discovered, 6000)
+          if (discoveredHealth.ok) {
+            activeUrl = discovered
+            setServerBaseUrl(discovered)
+            setServerUrlState(discovered)
+            res = discoveredHealth
+          }
         }
       }
 

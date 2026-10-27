@@ -100,9 +100,24 @@ class IndicConformerEngine:
         import torch  # type: ignore import-not-found
 
         model = self.load()
-        wav = torch.from_numpy(np.ascontiguousarray(audio, dtype=np.float32)).unsqueeze(0)
+        samples = np.ascontiguousarray(audio, dtype=np.float32)
+        if samples.ndim > 1:
+            samples = np.mean(samples, axis=0)
+        # Official call shape is (1, time) at 16 kHz. ONNX uses the GPU itself
+        # when onnxruntime-gpu is installed; moving the wrapper to CUDA breaks it.
+        wav = torch.from_numpy(samples).unsqueeze(0)
+        text = self._decode(model, wav, language, self.decoder)
+        alternate = "rnnt" if self.decoder != "rnnt" else "ctc"
+        if not any(char.isalpha() for char in text):
+            text = self._decode(model, wav, language, alternate) or text
+        return text
+
+    @staticmethod
+    def _decode(model: Any, wav: Any, language: str, decoder: str) -> str:
+        import torch  # type: ignore import-not-found
+
         with torch.inference_mode():
-            output = model(wav, language, self.decoder)
+            output = model(wav, language, decoder)
         if isinstance(output, (list, tuple)):
             output = output[0] if output else ""
         return str(output or "").strip()

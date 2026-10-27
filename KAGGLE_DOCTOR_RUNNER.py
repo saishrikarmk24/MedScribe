@@ -82,7 +82,8 @@ subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", f"{WORK_DIR}
 print("      Installing IndicConformer ONNX-GPU & Transformers dependencies...")
 subprocess.run([
     sys.executable, "-m", "pip", "install", "-q",
-    "transformers", "onnxruntime-gpu", "torchaudio", "huggingface_hub", "soundfile"
+    "transformers", "torchaudio", "huggingface_hub", "soundfile",
+    "onnx==1.20.1", "onnxruntime-gpu==1.20.1",
 ])
 
 # Configure environment for dual-GPU operation:
@@ -99,9 +100,11 @@ FASTER_WHISPER_DEVICE=cuda
 FASTER_WHISPER_DEVICE_INDEX=0
 FASTER_WHISPER_COMPUTE_TYPE=float16
 ASR_LANGUAGES=ta,en,hi
+ASR_DEVICE=cuda
+ASR_COMPUTE_TYPE=float16
 ASR_SECOND_PASS=indic_conformer
 ASR_SECOND_PASS_MODEL=ai4bharat/indic-conformer-600m-multilingual
-ASR_SECOND_PASS_DECODER=ctc
+ASR_SECOND_PASS_DECODER=rnnt
 HUGGINGFACE_TOKEN={hf_token}
 HF_TOKEN={hf_token}
 ENVIRONMENT=production
@@ -163,7 +166,7 @@ model = AutoModel.from_pretrained(
 )
 dummy = torch.zeros((1, 16000), dtype=torch.float32)
 with torch.inference_mode():
-    res = model(dummy, 'ta', 'ctc')
+    res = model(dummy, 'ta', 'rnnt')
 print('      [IndicConformer] Inference test passed!')
 """
 

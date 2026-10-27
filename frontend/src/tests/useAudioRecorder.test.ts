@@ -229,7 +229,7 @@ describe('useAudioRecorder', () => {
     expect(result.current.state).toBe('idle')
   })
 
-  it('reports a failed piece at Stop instead of sending the rest', async () => {
+  it('sends the missed audio again when a live piece fails', async () => {
     const { stream } = stopTracker()
     getUserMedia.mockResolvedValue(stream)
     const upload = vi
@@ -247,7 +247,10 @@ describe('useAudioRecorder', () => {
       await result.current.stop()
     })
 
-    expect(upload).toHaveBeenCalledTimes(1)
+    expect(upload.mock.calls.length).toBeGreaterThan(1)
+    expect(upload.mock.calls.at(-1)?.[2]).toEqual({ final: true })
+    const finalFile = upload.mock.calls.at(-1)?.[1] as File
+    expect(finalFile.size).toBeGreaterThan(20 * 16000 * 2)
     expect(result.current.state).toBe('error')
     expect(result.current.error).toMatch(/CUDA out of memory/)
   })

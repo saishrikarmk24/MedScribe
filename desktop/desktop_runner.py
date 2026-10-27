@@ -30,8 +30,8 @@ from dotenv import load_dotenv
 load_dotenv(BACKEND_DIR / ".env")
 load_dotenv(DESKTOP_DIR / ".env")
 load_dotenv(REPO_ROOT / ".env")
-os.environ["GEMINI_MODEL"] = "gemini-3.7-flash"
-os.environ["GEMINI_ASR_MODEL"] = "gemini-3.7-flash"
+os.environ["GEMINI_MODEL"] = "gemini-3.8-flash"
+os.environ["GEMINI_ASR_MODEL"] = "gemini-3.8-flash"
 os.environ["AI_MODE"] = "gemini"
 os.environ["ASR_PROVIDER"] = "gemini"
 os.environ["DIARIZATION_PROVIDER"] = "gemini"

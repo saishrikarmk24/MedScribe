@@ -118,6 +118,27 @@ export function findPieceCut(
   return { index: bestIndex, silent: bestRms < SILENCE_RMS }
 }
 
+function pcmFromWav(wav: ArrayBuffer): Float32Array {
+  const view = new DataView(wav)
+  const count = Math.max(0, Math.floor((wav.byteLength - 44) / 2))
+  const samples = new Float32Array(count)
+  for (let i = 0; i < count; i += 1) {
+    samples[i] = view.getInt16(44 + i * 2, true) / 0x8000
+  }
+  return samples
+}
+
+function concatSamples(parts: Float32Array[]): Float32Array {
+  const total = parts.reduce((sum, part) => sum + part.length, 0)
+  const merged = new Float32Array(total)
+  let offset = 0
+  for (const part of parts) {
+    merged.set(part, offset)
+    offset += part.length
+  }
+  return merged
+}
+
 function mergeChunks(chunks: Float32Array[], total: number): Float32Array {
   const merged = new Float32Array(total)
   let offset = 0
@@ -173,6 +194,7 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
   const nextCheckRef = useRef(PIECE_TARGET_SECONDS)
   const queueRef = useRef<Promise<void>>(Promise.resolve())
   const pieceErrorRef = useRef<Error | null>(null)
+  const failedPiecesRef = useRef<Float32Array[]>([])
   const cancelledRef = useRef(false)
 
   /** Releases the microphone and tears down the audio graph. */
@@ -214,14 +236,20 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
   const sendPiece = useCallback(
     (samples: Float32Array) => {
       if (!sessionId) return
-      const file = new File([encodeWav(samples, TARGET_SAMPLE_RATE)], `piece-${Date.now()}.wav`, {
-        type: 'audio/wav',
-      })
       queueRef.current = queueRef.current.then(async () => {
-        if (cancelledRef.current || pieceErrorRef.current) return
+        if (cancelledRef.current) {
+          failedPiecesRef.current.push(samples)
+          return
+        }
+        const file = new File([encodeWav(samples, TARGET_SAMPLE_RATE)], `piece-${Date.now()}.wav`, {
+          type: 'audio/wav',
+        })
         try {
           await api.uploadRecording(sessionId, file, { final: false })
         } catch (err) {
+          // Keep the samples. Stop sends them again with the remainder so one
+          // failed slice does not throw away the consultation.
+          failedPiecesRef.current.push(samples)
           pieceErrorRef.current = err as Error
         }
       })
@@ -262,6 +290,7 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
     nextCheckRef.current = PIECE_TARGET_SECONDS
     queueRef.current = Promise.resolve()
     pieceErrorRef.current = null
+    failedPiecesRef.current = []
     cancelledRef.current = false
     setState('requesting')
 
@@ -362,8 +391,15 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
     setState('uploading')
     try {
       await queueRef.current
-      if (pieceErrorRef.current) throw pieceErrorRef.current
-      const file = new File([recorded.wav], `recording-${Date.now()}.wav`, { type: 'audio/wav' })
+      const recovered = failedPiecesRef.current
+      failedPiecesRef.current = []
+      pieceErrorRef.current = null
+      const parts = [...recovered]
+      if (recorded) parts.push(pcmFromWav(recorded.wav))
+      const merged = concatSamples(parts.filter((part) => part.length > 0))
+      const file = new File([encodeWav(merged, TARGET_SAMPLE_RATE)], `recording-${Date.now()}.wav`, {
+        type: 'audio/wav',
+      })
       const result = await api.uploadRecording(sessionId, file, { final: true })
       if (!result.ok) {
         // The backend recognised no speech. Reported as-is; never backfilled.

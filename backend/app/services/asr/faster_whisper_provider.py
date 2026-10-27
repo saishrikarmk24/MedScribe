@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import re
 import threading
 from typing import Any
 
@@ -52,12 +53,27 @@ _PAD_SECONDS = 0.2
 # One extra temperature only if the first decode trips compression/log-prob gates.
 _TEMPERATURES = (0.0, 0.4)
 # Below this share of English, an utterance counts as Indian-language speech.
-_ENGLISH_HEAVY = 0.5
+# 0.70 matches LanguagePolicy.english_threshold. The old 0.50 cutoff left a
+# dead zone: Tamil scored as "maybe English" never reached IndicConformer.
+_ENGLISH_HEAVY = 0.70
 # Enough English mixed in that IndicConformer may drop drug names / Latin terms.
 _MIXED_LOW = 0.28
+# Whisper's language id is English-heavy on Tamil. This is still enough of an
+# Indian-language score to run IndicConformer beside Whisper.
+_INDIC_WORTH_A_SECOND_PASS = 0.12
 _CONFORMER_CONFIDENCE = 0.85
 _REJECTED_CONFIDENCE = 0.35
-_LID_PREFIX_SECONDS = 2.0
+# Language id looks at several windows. The first two seconds are often
+# "hello doctor" even when the rest of the turn is Tamil.
+_LID_WINDOW_SECONDS = 4.0
+_MEDICAL_TOKEN = re.compile(r"\b[A-Z][a-zA-Z]{2,}\b|\b\d+(?:\.\d+)?\s?(?:mg|ml|mcg|g)?\b")
+_DOSE_TOKEN = re.compile(r"\b(?:bd|od|tds|qid|sos|hs)\b", re.IGNORECASE)
+_MEDICAL_STOP = frozenset(
+    {
+        "doctor", "hello", "okay", "right", "yes", "the", "this", "that", "have",
+        "taking", "since", "days", "fever", "pain", "headache", "cough", "cold",
+    }
+)
 
 
 def pick_mixed_hypothesis(
@@ -85,6 +101,10 @@ def pick_mixed_hypothesis(
     whisper_mixed = whisper_native >= 6 and whisper_latin >= 6 and not tamil_is_garbled(whisper_text)
     if whisper_mixed and whisper_native + 8 >= conformer_native:
         return "whisper"
+    # A full Tamil or Hindi sentence must win over an English translation of it.
+    # A short native fragment still loses to a Whisper line that kept the drug name.
+    if conformer_native >= 18 and whisper_native < 8:
+        return "conformer"
     # Keep a clean English/Tanglish decode so brand names are not dropped.
     if whisper_latin >= 12 and not tamil_is_garbled(whisper_text):
         return "whisper"
@@ -93,6 +113,22 @@ def pick_mixed_hypothesis(
     if conformer_native > whisper_native:
         return "conformer"
     return "whisper"
+
+
+def with_medical_latin(base: str, source: str) -> str:
+    """Keep brand names and doses from Whisper when the native-script line is kept."""
+    kept: list[str] = []
+    seen: set[str] = set()
+    haystack = (base or "").lower()
+    for token in list(_MEDICAL_TOKEN.findall(source or "")) + _DOSE_TOKEN.findall(source or ""):
+        key = token.lower()
+        if key in _MEDICAL_STOP or key in haystack or key in seen:
+            continue
+        seen.add(key)
+        kept.append(token)
+    if not kept:
+        return base
+    return f"{base.rstrip()} {' '.join(kept)}".strip()
 
 # One model per (name, device, compute type) for the whole process. Loading
 # large-v3-turbo takes several seconds and ~1.5 GB, so it must not be repeated
@@ -225,6 +261,7 @@ class FasterWhisperProvider(ASRProvider):
         self.second_pass = second_pass
         if self.second_pass is None and settings.asr_second_pass == "indic_conformer" and self._expects_indic():
             self.second_pass = IndicConformerEngine()
+        self._conformer_runtime_failures = 0
         self._model: Any | None = None
 
     def _expects_indic(self) -> bool:
@@ -294,6 +331,18 @@ class FasterWhisperProvider(ASRProvider):
             source, reason = "whisper", "English-heavy utterance"
             conformer_language = language if self._conformer_handles(language) else None
             mixed = bool(conformer_language) and _MIXED_LOW <= english_share < _ENGLISH_HEAVY
+            # Whisper often labels Tamil as English because the turn opens with
+            # "hello doctor". A modest Tamil/Hindi score still deserves IndicConformer.
+            if conformer_language is None:
+                indic_language = self.policy.best_indic()
+                indic_score = self.policy.last_scores.get(indic_language, 0.0) if indic_language else 0.0
+                if (
+                    indic_language
+                    and indic_score >= _INDIC_WORTH_A_SECOND_PASS
+                    and self._conformer_handles(indic_language)
+                ):
+                    conformer_language = indic_language
+                    mixed = True
             if conformer_language and english_share < _ENGLISH_HEAVY and not mixed:
                 text = self._second_pass_text(piece, conformer_language, duration)
                 if text:
@@ -309,7 +358,14 @@ class FasterWhisperProvider(ASRProvider):
                 problem = whisper_problem(raw_text, language, duration, self._quality(segments))
                 chosen = pick_mixed_hypothesis(raw_text, problem, conformer_text)
                 if chosen == "conformer" and conformer_text:
-                    self._append_conformer(results, frame, conformer_text, offset, offset + duration, conformer_language)
+                    self._append_conformer(
+                        results,
+                        frame,
+                        with_medical_latin(conformer_text, raw_text),
+                        offset,
+                        offset + duration,
+                        conformer_language,
+                    )
                     source, reason = "indic_conformer", "mixed utterance: native-script hypothesis"
                 else:
                     self._append_whisper(results, frame, segments, prompt, offset, language, problem)
@@ -354,7 +410,9 @@ class FasterWhisperProvider(ASRProvider):
                 if problem and rescue_language and self._conformer_handles(rescue_language):
                     rescued = self._second_pass_text(piece, rescue_language, duration)
                 if rescued:
-                    self._append_conformer(results, frame, rescued, offset, offset + duration, rescue_language)
+                    self._append_conformer(
+                        results, frame, with_medical_latin(rescued, raw_text), offset, offset + duration, rescue_language
+                    )
                     source, reason = "indic_conformer", f"Whisper rejected: {problem}"
                 else:
                     self._append_whisper(results, frame, segments, prompt, offset, language, problem)
@@ -490,8 +548,20 @@ class FasterWhisperProvider(ASRProvider):
         try:
             text = self.second_pass.transcribe(piece, language)
         except Exception as exc:
-            self._disable_second_pass(exc)
+            message = str(exc).lower()
+            permanent = any(token in message for token in ("onnx", "no module", "gated", "401", "403", "not installed"))
+            if permanent:
+                self._disable_second_pass(exc)
+            else:
+                self._conformer_runtime_failures += 1
+                logger.warning(
+                    "asr_second_pass_utterance_failed",
+                    extra={"language": language, "error": str(exc), "failures": self._conformer_runtime_failures},
+                )
+                if self._conformer_runtime_failures >= 3:
+                    self._disable_second_pass(exc)
             return None
+        self._conformer_runtime_failures = 0
         return text if conformer_plausible(text, duration) else None
 
     def _disable_second_pass(self, exc: Exception) -> None:
@@ -530,19 +600,34 @@ class FasterWhisperProvider(ASRProvider):
             return self.fixed_language, 1.0
         if duration < 1.5 and self.policy.previous:
             return self.policy.previous, self.policy.last_scores.get(self.policy.previous, 0.0)
-        probe = piece
-        try:
-            n_prefix = int(_LID_PREFIX_SECONDS * SAMPLE_RATE)
-            if duration > _LID_PREFIX_SECONDS + 0.5 and len(piece) > n_prefix:
-                probe = piece[:n_prefix]
-        except TypeError:
-            probe = piece
-        try:
-            _language, _probability, probabilities = model.detect_language(probe)
-        except Exception:
-            logger.warning("asr_language_detection_failed", exc_info=True)
+        merged: dict[str, float] = {}
+        saw = False
+        for probe in self._lid_windows(piece, duration):
+            try:
+                _language, _probability, probabilities = model.detect_language(probe)
+            except Exception:
+                logger.warning("asr_language_detection_failed", exc_info=True)
+                continue
+            saw = True
+            for code, probability in probabilities:
+                merged[code] = max(merged.get(code, 0.0), float(probability))
+        if not saw:
             return self.policy.previous, 0.0
-        return self.policy.choose(probabilities, duration)
+        return self.policy.choose(list(merged.items()), duration)
+
+    @staticmethod
+    def _lid_windows(piece: Any, duration: float) -> list[Any]:
+        """Start, middle and end of a long turn. A greeting must not hide Tamil."""
+        try:
+            length = len(piece)
+            window = int(_LID_WINDOW_SECONDS * SAMPLE_RATE)
+        except TypeError:
+            return [piece]
+        if duration <= _LID_WINDOW_SECONDS + 0.5 or length <= int(window * 1.5):
+            return [piece]
+        middle = length // 2
+        half = window // 2
+        return [piece[:window], piece[max(0, middle - half) : middle + half], piece[-window:]]
 
     def _prompt_for(self, language: str | None) -> str | None:
         if self.prompt_override:

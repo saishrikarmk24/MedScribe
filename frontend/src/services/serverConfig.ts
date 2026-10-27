@@ -48,14 +48,31 @@ export function initServerUrl(): string {
     console.warn('Could not parse server query parameter:', err)
   }
 
+  // A consultation opened on this machine must use the backend on this machine.
+  // A Kaggle tunnel saved from an earlier demo dies when the notebook stops.
+  // Following that saved URL makes every button fail in front of the room.
+  if (isLocalDemoHost()) {
+    try {
+      const storedLocal = localStorage.getItem(STORAGE_KEY)
+      if (storedLocal && !/127\.0\.0\.1|localhost/.test(storedLocal)) {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    } catch {
+      // ignore
+    }
+    return LOCAL_BACKEND
+  }
+
   const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null
   if (stored) {
     const cleaned = cleanUrl(stored)
-    // Ignore vercel.app or stale non-10wq onrender hostnames stored in previous testing sessions
+    // Ignore vercel.app or stale non-10wq onrender hostnames stored in previous testing sessions.
+    // A trycloudflare address is only trusted after a health check adopts it.
     if (
       cleaned &&
       !cleaned.includes('vercel.app') &&
-      !cleaned.includes('voicescribe-api.onrender.com')
+      !cleaned.includes('voicescribe-api.onrender.com') &&
+      !cleaned.includes('trycloudflare.com')
     ) {
       return cleaned
     }
@@ -73,28 +90,30 @@ export function initServerUrl(): string {
   return DEFAULT_ONLINE_BACKEND
 }
 
+const LOCAL_BACKEND = 'http://127.0.0.1:8000'
 const BEACON_URL = 'https://ntfy.sh/voicescribe_doctor_live_beacon/raw?poll=1'
 
+export function isLocalDemoHost(hostname?: string): boolean {
+  const host = hostname ?? (typeof window !== 'undefined' ? window.location.hostname : '')
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+}
+
 /**
- * Automatically discovers the active Kaggle Cloudflare tunnel URL from the cloud beacon.
- * Reads the latest trycloudflare.com URL published by the active Kaggle runner.
+ * Read the newest Kaggle tunnel URL from the beacon.
+ *
+ * Does not switch the app over. Callers adopt the URL only after `/api/health`
+ * succeeds, so a dead tunnel cannot replace a working backend.
+ * A local demo never consults the beacon.
  */
-export async function fetchBeaconServerUrl(forceUpdate = true): Promise<string | null> {
+export async function fetchBeaconServerUrl(_forceUpdate = true): Promise<string | null> {
+  if (typeof window !== 'undefined' && isLocalDemoHost()) return null
   try {
     const res = await fetch(`${BEACON_URL}&_=${Date.now()}`, { cache: 'no-store' })
     if (!res.ok) return null
     const text = (await res.text()).trim()
     const matches = text.match(/https:\/\/[a-zA-Z0-9-]+\.trycloudflare\.com/g)
     if (!matches || matches.length === 0) return null
-
-    // Pick the newest URL published by Kaggle
-    const latest = cleanUrl(matches[matches.length - 1])
-    if (latest) {
-      if (forceUpdate || latest !== currentServerUrl) {
-        setServerBaseUrl(latest)
-      }
-      return latest
-    }
+    return cleanUrl(matches[matches.length - 1])
   } catch (e) {
     console.warn('Beacon discovery failed:', e)
   }

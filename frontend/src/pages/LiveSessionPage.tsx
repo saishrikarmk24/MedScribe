@@ -55,6 +55,8 @@ export function LiveSessionPage() {
     setSession,
     setNote,
     streamingSections,
+    errors,
+    dismissError,
   } = useSessionStore()
 
   const navigate = useNavigate()
@@ -282,10 +284,17 @@ export function LiveSessionPage() {
     </div>
   )
 
+  const pipelineError = errors[0]
   const errorAlert = recorder.error ? (
     <div className="shrink-0 px-4 pb-3 md:px-6">
       <InlineAlert kind="error" title="Recording Error" onDismiss={recorder.clearError}>
         {recorder.error}
+      </InlineAlert>
+    </div>
+  ) : pipelineError ? (
+    <div className="shrink-0 px-4 pb-3 md:px-6">
+      <InlineAlert kind="error" title="Consultation interrupted" onDismiss={() => dismissError(pipelineError.code)}>
+        {pipelineError.message}
       </InlineAlert>
     </div>
   ) : null

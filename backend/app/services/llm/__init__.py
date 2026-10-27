@@ -39,8 +39,10 @@ def build_llm_provider(model_name: str | None = None) -> LLMProvider:
     )
     target_model = model_name or default_model
     target_lower = target_model.lower()
-    if "gemini" in target_lower and any(legacy in target_lower for legacy in ("gemini-1.", "gemini-2.0")):
-        target_model = "gemini-3.7-flash"
+    from app.services.llm.gemini_request import canonical_gemini_model
+
+    if "gemini" in target_lower:
+        target_model = canonical_gemini_model(target_model)
         target_lower = target_model.lower()
 
     # Mock mode and sessions pinned to the rule engine must never reach a real model:

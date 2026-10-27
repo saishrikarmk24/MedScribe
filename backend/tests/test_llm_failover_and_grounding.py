@@ -337,6 +337,48 @@ def test_vernacular_is_grounded_in_english() -> None:
     assert colloquial_glossary("gas trouble and loose motions")["gas trouble"] == "dyspepsia / gastritis"
 
 
+def test_patient_medicine_line_stays_with_the_patient() -> None:
+    """The line from the SIMS demo: the patient took Dolo; that is not the doctor."""
+    from app.models.enums import SpeakerRole
+    from app.services.diarization.text_splitter import repair_turn_speakers
+    from app.services.types import AssembledSegment
+
+    def seg(ref: str, text: str, speaker: str = "speaker_0") -> AssembledSegment:
+        return AssembledSegment(
+            ref=ref,
+            speaker_label=speaker,
+            role=SpeakerRole.UNKNOWN,
+            text=text,
+            start_time=0,
+            end_time=1,
+            confidence=0.9,
+            asr_confidence=0.9,
+            diarization_confidence=0.9,
+        )
+
+    turns = repair_turn_speakers(
+        [
+            seg("seg_001", "Hello Doctor.", "speaker_0"),
+            seg("seg_002", "So, I have been facing", "speaker_1"),
+            seg("seg_003", "headache and throat pain for past five days. I have taken", "speaker_1"),
+            seg("seg_004", "Dolo 650 BD (twice daily) for 5 days. But", "speaker_0"),
+            seg("seg_005", "The improvement is so minimal, there hasn't been much improvement in my", "speaker_1"),
+            seg("seg_006", "recovery.", "speaker_1"),
+            seg("seg_007", "How long has the throat pain been this severe?", "speaker_0"),
+            seg("seg_008", "Take Dolo 650 twice daily after food for two more days.", "speaker_1"),
+        ]
+    )[0]
+    patient = " ".join(item.text for item in turns if item.speaker_label == "speaker_1")
+    doctor = " ".join(item.text for item in turns if item.speaker_label == "speaker_0")
+    assert "Hello Doctor" in patient
+    assert "Dolo 650 BD" in patient
+    assert "recovery" in patient
+    assert "How long" in doctor
+    assert doctor.startswith("How long") or "How long" in doctor
+    assert "Take Dolo 650" in doctor
+    assert "Dolo 650 BD" not in doctor
+
+
 def test_offline_splitter_labels_doctor_and_patient_turns() -> None:
     turns = [
         {"ref": "seg_001", "text": "How long have you had this headache?"},

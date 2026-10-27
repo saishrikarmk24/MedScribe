@@ -129,6 +129,7 @@ class SessionRuntime:
     last_ai_failure: float = 0.0
     fallback_reason: dict[str, Any] | None = None
     last_text_role: str | None = None
+    last_turn_text: str | None = None
     stage: ProcessingStage = ProcessingStage.IDLE
     utterances_by_speaker: dict[str, list[str]] = field(default_factory=dict)
     stopped: bool = False
@@ -489,27 +490,21 @@ class SessionPipeline:
             if not assembled:
                 return []
 
-            # Audio diarization found only one speaker: split turns by
-            # conversational role instead (offline unless Gemini is configured).
-            unique_speakers = {seg.speaker_label for seg in assembled}
-            if len(unique_speakers) <= 1 and len(assembled) >= 2:
-                await self._emit_stage(
-                    runtime, ProcessingStage.ROLE_ATTRIBUTION, "Splitting speakers by conversation",
-                )
-                from app.services.diarization.text_splitter import (  # noqa: PLC0415
-                    ClinicalTextSplitter,
-                    GeminiTextSplitter,
-                )
-                items = [{"ref": seg.ref, "text": seg.text} for seg in assembled]
-                splits = ClinicalTextSplitter().split(items, previous_role=runtime.last_text_role)
-                if splits:
-                    runtime.last_text_role = splits.get(assembled[-1].ref, runtime.last_text_role)
-                    for seg in assembled:
-                        role = splits.get(seg.ref)
-                        if role == "doctor":
-                            seg.speaker_label = "speaker_0"
-                        elif role == "patient":
-                            seg.speaker_label = "speaker_1"
+            # Clip-level diarization swaps speaker ids and cuts one sentence in
+            # two. Re-label from the words, and keep an unfinished sentence with
+            # the person who started it. A drug name alone is not the doctor.
+            await self._emit_stage(
+                runtime, ProcessingStage.ROLE_ATTRIBUTION, "Splitting speakers by conversation",
+            )
+            from app.services.diarization.text_splitter import repair_turn_speakers  # noqa: PLC0415
+
+            assembled, runtime.last_text_role, runtime.last_turn_text = repair_turn_speakers(
+                assembled,
+                previous_role=runtime.last_text_role,
+                previous_text=runtime.last_turn_text,
+            )
+            if not assembled:
+                return []
 
             stored: list[TranscriptSegment] = []
             speaker_updates: list[dict[str, Any]] = []
@@ -521,24 +516,15 @@ class SessionPipeline:
                     db, session.id, label, confidence=segment.diarization_confidence
                 )
 
-                # Utterance-level conversational role check (Doctor vs Patient)
-                utt_role, utt_conf = runtime.role_attribution.score_utterance(segment.text)
-                if (label in ("speaker_0", "unknown") or speaker.role_source != "HUMAN") and utt_role is not SpeakerRole.UNKNOWN and utt_conf >= 0.65:
-                    target_label = "speaker_0" if utt_role is SpeakerRole.DOCTOR else ("speaker_1" if utt_role is SpeakerRole.PATIENT else label)
-                    if target_label != label:
-                        label = target_label
-                        segment.speaker_label = label
-                        speaker = await repo.get_or_create_speaker(
-                            db, session.id, label, confidence=utt_conf
-                        )
-                        if speaker.role_source != "HUMAN":
-                            speaker.role = utt_role
-                            speaker.confidence = utt_conf
-                            speaker_updates.append(
-                                {"id": str(speaker.id), "label": label, "role": utt_role.value, "confidence": utt_conf}
-                            )
-
                 runtime.utterances_by_speaker.setdefault(label, []).append(segment.text)
+
+                if (
+                    speaker.role_source != "HUMAN"
+                    and speaker.role is SpeakerRole.UNKNOWN
+                    and segment.role is not SpeakerRole.UNKNOWN
+                ):
+                    speaker.role = segment.role
+                    speaker.confidence = max(speaker.confidence, 0.8)
 
                 if speaker.role_source != "HUMAN":
                     if not role_stage_emitted:

@@ -208,6 +208,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           note: payload.note ?? get().note,
           ai: payload.ai ?? get().ai,
           streamingSections: null,
+          errors: [],
           lastNoteChange: {
             sections: payload.changed_sections ?? [],
             summary: payload.change_summary ?? '',

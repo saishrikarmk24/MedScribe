@@ -105,6 +105,60 @@ def test_pick_mixed_prefers_conformer_when_whisper_is_garbled() -> None:
     assert pick_mixed_hypothesis("I have fever taking Dolo 650", None, "காய்ச்சல்") == "whisper"
 
 
+def test_pick_mixed_prefers_a_full_tamil_sentence_over_an_english_translation() -> None:
+    tamil = "எனக்கு ஐந்து நாள் ஆச்சு தலைவலி காய்ச்சல் இருக்கு"
+    assert pick_mixed_hypothesis("I have had headache and fever for five days", None, tamil) == "conformer"
+
+
+def test_english_biased_detector_still_sends_tamil_to_indic_conformer() -> None:
+    tamil = "எனக்கு ஐந்து நாள் ஆச்சு தலைவலி காய்ச்சல் இருக்கு"
+    conformer = FakeConformer(tamil)
+    whisper = FakeWhisper(
+        [("en", 0.78), ("ta", 0.22)],
+        [_segment("I have had a headache and fever for five days")],
+    )
+    segments = _provider(conformer)._transcribe_sync(whisper, _frame())
+    assert conformer.calls == ["ta"]
+    assert "தலைவலி" in segments[0].text
+
+
+def test_tamil_sentence_keeps_the_english_drug_name() -> None:
+    tamil = "எனக்கு ஐந்து நாள் ஆச்சு தலைவலி காய்ச்சல் இருக்கு"
+    conformer = FakeConformer(tamil)
+    whisper = FakeWhisper([("en", 0.6), ("ta", 0.4)], [_segment("taking Dolo 650 for five days")])
+    segments = _provider(conformer)._transcribe_sync(whisper, _frame())
+    assert "தலைவலி" in segments[0].text
+    assert "Dolo" in segments[0].text
+    assert "650" in segments[0].text
+
+
+def test_an_english_greeting_does_not_hide_tamil_later_in_the_turn() -> None:
+    class SwitchingWhisper(FakeWhisper):
+        def __init__(self) -> None:
+            super().__init__([("en", 0.93), ("ta", 0.04)], [_segment("ignored english")])
+            self.rounds = [
+                [("en", 0.93), ("ta", 0.04)],
+                [("ta", 0.82), ("en", 0.12)],
+                [("ta", 0.74), ("en", 0.18)],
+            ]
+            self.index = 0
+
+        def detect_language(self, _piece):
+            probs = self.rounds[min(self.index, len(self.rounds) - 1)]
+            self.index += 1
+            self.detections += 1
+            best = max(probs, key=lambda item: item[1])
+            return best[0], best[1], probs
+
+    tamil = "எனக்கு ஐந்து நாள் ஆச்சு தலைவலி காய்ச்சல் இருக்கு"
+    conformer = FakeConformer(tamil)
+    whisper = SwitchingWhisper()
+    segments = _provider(conformer, utterances=((0.0, 12.0),))._transcribe_sync(whisper, _frame(12.0))
+    assert whisper.detections == 3
+    assert conformer.calls == ["ta"]
+    assert "தலைவலி" in segments[0].text
+
+
 def test_whisper_decode_skips_word_timestamps_and_wide_beams() -> None:
     whisper = FakeWhisper([("en", 0.9), ("ta", 0.1)], [_segment("Fever for two days.")])
     _provider(None)._transcribe_sync(whisper, _frame())
