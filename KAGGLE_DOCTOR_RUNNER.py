@@ -7,10 +7,7 @@
 import os, sys, time, subprocess, shutil, urllib.request, re, json
 
 WORK_DIR = "/kaggle/working/VoiceScribeDoctor"
-REPO_URLS = [
-    "https://github.com/saishrikarmk24/MedScribe.git",
-    "https://github.com/saishrikarmk24/VoiceScribeOffline.git",
-]
+REPO_URL = "https://github.com/saishrikarmk24/VoiceScribeOffline.git"
 
 print("\n" + "=" * 75)
 print("🚀 LAUNCHING VOICESCRIBE DOCTOR WORKSTATION (DUAL-GPU)")
@@ -70,24 +67,12 @@ else:
 
 # [5/7] Clone codebase & install python dependencies
 print("[5/7] Setting up VoiceScribe backend & ML dependencies...")
-cloned = False
 if not os.path.exists(WORK_DIR):
-    for repo in REPO_URLS:
-        try:
-            print(f"      Cloning from {repo}...")
-            subprocess.run(["git", "clone", repo, WORK_DIR], check=True)
-            cloned = True
-            break
-        except Exception as e:
-            print(f"      Clone from {repo} failed: {e}")
-            if os.path.exists(WORK_DIR):
-                shutil.rmtree(WORK_DIR)
+    print(f"      Cloning from {REPO_URL}...")
+    subprocess.run(["git", "clone", REPO_URL, WORK_DIR], check=True)
 else:
-    try:
-        subprocess.run(["git", "-C", WORK_DIR, "pull", "origin", "main"], check=True)
-        cloned = True
-    except Exception:
-        pass
+    print(f"      Updating {WORK_DIR} from {REPO_URL}...")
+    subprocess.run(["git", "-C", WORK_DIR, "pull", "origin", "main"], check=True)
 
 print("      Installing Python backend requirements...")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", f"{WORK_DIR}/backend/requirements.txt"])
