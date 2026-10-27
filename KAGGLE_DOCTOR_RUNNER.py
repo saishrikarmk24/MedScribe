@@ -1,27 +1,30 @@
 # ===========================================================================
 # 🏥 VOICESCRIBE CLINICAL WORKSTATION: DUAL-GPU KAGGLE RUNNER (DOCTOR EDITION)
 # ===========================================================================
-# Hardware: Kaggle GPU T4 x 2 (GPU 0: Gemma 4 e4b LLM, GPU 1: Whisper Large Turbo)
+# Hardware: Kaggle GPU T4 x 2 (GPU 0: Gemma 4 e4b LLM, GPU 1: Whisper + IndicConformer)
 # ===========================================================================
 
 import os, sys, time, subprocess, shutil, urllib.request, re, json
 
 WORK_DIR = "/kaggle/working/VoiceScribeDoctor"
-REPO_URL = "https://github.com/saishrikarmk24/VoiceScribeOffline.git"
+REPO_URLS = [
+    "https://github.com/saishrikarmk24/MedScribe.git",
+    "https://github.com/saishrikarmk24/VoiceScribeOffline.git",
+]
 
 print("\n" + "=" * 75)
 print("🚀 LAUNCHING VOICESCRIBE DOCTOR WORKSTATION (DUAL-GPU)")
 print("=" * 75 + "\n")
 
-# [1/6] Kill any previous processes
-print("[1/6] Stopping old processes...")
+# [1/7] Kill any previous processes
+print("[1/7] Stopping old processes...")
 subprocess.run(["pkill", "-9", "-f", "uvicorn"], stderr=subprocess.DEVNULL)
 subprocess.run(["pkill", "-9", "-f", "cloudflared"], stderr=subprocess.DEVNULL)
 subprocess.run(["pkill", "-9", "-f", "ollama"], stderr=subprocess.DEVNULL)
 time.sleep(1)
 
-# [2/6] Install system dependencies (zstd required for Ollama extraction)
-print("[2/6] Installing ffmpeg, pciutils, zstd, and cloudflared...")
+# [2/7] Install system dependencies (zstd required for Ollama extraction)
+print("[2/7] Installing ffmpeg, pciutils, zstd, and cloudflared...")
 subprocess.run(["apt-get", "update", "-qq"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 subprocess.run(["apt-get", "install", "-y", "-qq", "ffmpeg", "pciutils", "curl", "zstd"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
@@ -32,8 +35,8 @@ if not os.path.exists("/usr/local/bin/cloudflared"):
     )
     os.chmod("/usr/local/bin/cloudflared", 0o755)
 
-# [3/6] Setup Ollama with GPU acceleration on GPU 0
-print("[3/6] Setting up Ollama daemon on GPU 0...")
+# [3/7] Setup Ollama with GPU acceleration on GPU 0
+print("[3/7] Setting up Ollama daemon on GPU 0...")
 if not os.path.exists("/usr/local/bin/ollama"):
     subprocess.run("curl -fsSL https://ollama.com/install.sh | sh", shell=True, check=True)
 
@@ -46,27 +49,74 @@ time.sleep(3)
 print("      Pulling Gemma 4 e4b clinical model...")
 subprocess.run(["ollama", "pull", "gemma4:e4b"], check=True)
 
-# [4/6] Clone codebase & install python dependencies
-print("[4/6] Setting up VoiceScribe backend...")
-if not os.path.exists(WORK_DIR):
-    subprocess.run(["git", "clone", REPO_URL, WORK_DIR], check=True)
-else:
-    subprocess.run(["git", "-C", WORK_DIR, "pull", "origin", "main"])
+# [4/7] Resolve Hugging Face token (Kaggle Secrets -> os.environ)
+hf_token = None
+try:
+    from kaggle_secrets import UserSecretsClient
+    secrets = UserSecretsClient()
+    hf_token = secrets.get_secret("HUGGINGFACE_TOKEN") or secrets.get_secret("HF_TOKEN")
+except Exception:
+    pass
 
-print("      Installing Python dependencies...")
+if not hf_token:
+    hf_token = os.environ.get("HUGGINGFACE_TOKEN") or os.environ.get("HF_TOKEN") or ""
+
+if hf_token:
+    os.environ["HUGGINGFACE_TOKEN"] = hf_token
+    os.environ["HF_TOKEN"] = hf_token
+    print(f"      ✅ Hugging Face Token detected: {hf_token[:4]}...{hf_token[-4:]}")
+else:
+    print("      ⚠️ Hugging Face token not found in Kaggle Secrets! Please add HUGGINGFACE_TOKEN in Kaggle Add-ons -> Secrets.")
+
+# [5/7] Clone codebase & install python dependencies
+print("[5/7] Setting up VoiceScribe backend & ML dependencies...")
+cloned = False
+if not os.path.exists(WORK_DIR):
+    for repo in REPO_URLS:
+        try:
+            print(f"      Cloning from {repo}...")
+            subprocess.run(["git", "clone", repo, WORK_DIR], check=True)
+            cloned = True
+            break
+        except Exception as e:
+            print(f"      Clone from {repo} failed: {e}")
+            if os.path.exists(WORK_DIR):
+                shutil.rmtree(WORK_DIR)
+else:
+    try:
+        subprocess.run(["git", "-C", WORK_DIR, "pull", "origin", "main"], check=True)
+        cloned = True
+    except Exception:
+        pass
+
+print("      Installing Python backend requirements...")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", f"{WORK_DIR}/backend/requirements.txt"])
 
-# Configure environment with startup warmup enabled
+print("      Installing IndicConformer ONNX-GPU & Transformers dependencies...")
+subprocess.run([
+    sys.executable, "-m", "pip", "install", "-q",
+    "transformers", "onnxruntime-gpu", "torchaudio", "huggingface_hub", "soundfile"
+])
+
+# Configure environment for dual-GPU operation:
+# Ollama runs on GPU 0.
+# The backend runs with CUDA_VISIBLE_DEVICES=1, so physical GPU 1 is device 0 for uvicorn.
 with open(f"{WORK_DIR}/backend/.env", "w") as f:
-    f.write("""
+    f.write(f"""
 AI_MODE=local
 LOCAL_LLM_API=ollama
 LOCAL_LLM_MODEL=gemma4:e4b
 ASR_PROVIDER=faster_whisper
 FASTER_WHISPER_MODEL=large-v3-turbo
 FASTER_WHISPER_DEVICE=cuda
-FASTER_WHISPER_DEVICE_INDEX=1
+FASTER_WHISPER_DEVICE_INDEX=0
 FASTER_WHISPER_COMPUTE_TYPE=float16
+ASR_LANGUAGES=ta,en,hi
+ASR_SECOND_PASS=indic_conformer
+ASR_SECOND_PASS_MODEL=ai4bharat/indic-conformer-600m-multilingual
+ASR_SECOND_PASS_DECODER=ctc
+HUGGINGFACE_TOKEN={hf_token}
+HF_TOKEN={hf_token}
 ENVIRONMENT=production
 ALLOW_SQLITE_FALLBACK=true
 DEV_AUTH_ENABLED=true
@@ -76,11 +126,11 @@ ASR_WARMUP_ON_STARTUP=true
 LOCAL_LLM_KEEP_ALIVE=24h
 """)
 
-# [5/7] Pre-warm Dual GPUs before starting server
+# [6/7] Pre-warm Dual GPUs before starting server
 print("\n⚡ PRE-WARMING DUAL GPUs (PRIMING VRAM FOR ZERO-LATENCY CLINICAL INFERENCE)...")
 
 # 1. Warm up GPU 0 (Ollama Gemma in VRAM with keep_alive=-1)
-print("   [1/2] Priming GPU 0: Loading Gemma 4 into VRAM...")
+print("   [1/3] Priming GPU 0: Loading Gemma 4 into VRAM...")
 try:
     warmup_req = urllib.request.Request(
         "http://127.0.0.1:11434/api/generate",
@@ -93,7 +143,7 @@ except Exception as e:
     print(f"   ⚠️ GPU 0 warmup note: {e}")
 
 # 2. Warm up GPU 1 (Whisper Large-v3-Turbo on GPU 1)
-print("   [2/2] Priming GPU 1: Loading Faster-Whisper Large-v3-Turbo...")
+print("   [2/3] Priming GPU 1: Loading Faster-Whisper Large-v3-Turbo...")
 try:
     warmup_cmd = (
         f"{sys.executable} -c \""
@@ -110,21 +160,47 @@ try:
 except Exception as e:
     print(f"   ⚠️ GPU 1 warmup note: {e}")
 
+# 3. Warm up GPU 1 (AI4Bharat IndicConformer-600M for Tamil/Hindi on GPU 1)
+print("   [3/3] Priming GPU 1: Loading AI4Bharat IndicConformer-600M (Tamil & Hindi)...")
+try:
+    indic_warmup_cmd = (
+        f"{sys.executable} -c \""
+        "import os, numpy as np, torch; "
+        f"os.environ['CUDA_VISIBLE_DEVICES'] = '1'; "
+        f"os.environ['HUGGINGFACE_TOKEN'] = '{hf_token}'; "
+        f"os.environ['HF_TOKEN'] = '{hf_token}'; "
+        "from transformers import AutoModel; "
+        f"model = AutoModel.from_pretrained('ai4bharat/indic-conformer-600m-multilingual', trust_remote_code=True, token='{hf_token}'); "
+        "dummy = torch.zeros((1, 16000), dtype=torch.float32); "
+        "with torch.inference_mode(): "
+        "    res = model(dummy, 'ta', 'ctc'); "
+        "print('IndicConformer primed successfully!')\""
+    )
+    subprocess.run(indic_warmup_cmd, shell=True, check=True)
+    print("   ✅ GPU 1 primed: IndicConformer locked into VRAM for Tamil & Hindi recognition!")
+except Exception as e:
+    print(f"   ⚠️ IndicConformer pre-warm warning (will fall back gracefully if needed): {e}")
+
 print("\n📊 VRAM Allocation Verification:")
 subprocess.run(["nvidia-smi", "--query-gpu=index,name,memory.used,memory.total", "--format=csv,noheader"])
 
-# [6/7] Start VoiceScribe Backend
-print("\n[6/7] Starting VoiceScribe backend on port 8000...")
+# [7/7] Start VoiceScribe Backend on GPU 1 & Launch Cloudflare Tunnel
+print("\n[7/7] Starting VoiceScribe backend on GPU 1 (port 8000)...")
+backend_env = os.environ.copy()
+backend_env["CUDA_VISIBLE_DEVICES"] = "1"
+backend_env["HUGGINGFACE_TOKEN"] = hf_token
+backend_env["HF_TOKEN"] = hf_token
+
 subprocess.Popen(
     [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
     cwd=f"{WORK_DIR}/backend",
+    env=backend_env,
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL
 )
 time.sleep(4)
 
-# [7/7] Launch Cloudflare HTTPS Tunnel
-print("[7/7] Launching Cloudflare HTTPS tunnel...")
+print("      Launching Cloudflare HTTPS tunnel...")
 tunnel_proc = subprocess.Popen(
     ["cloudflared", "tunnel", "--url", "http://127.0.0.1:8000"],
     stdout=subprocess.PIPE,
@@ -165,7 +241,7 @@ if tunnel_url:
     print(f"🌐 Active Backend URL : {tunnel_url}")
     print(f"🔗 Pure Vercel Frontend (Auto-connects):")
     print(f"   👉 https://voicescribe-doctor.vercel.app")
-    print(f"🤖 LLM: gemma4:e4b on GPU 0 | 🎙️ Whisper on GPU 1")
+    print(f"🤖 LLM: gemma4:e4b on GPU 0 | 🎙️ Whisper + IndicConformer on GPU 1")
     print(f"🔑 Doctor Login: Click '1-Click Dev Fill' (DOC-101 / doctor123)")
 else:
     print("⚠️ Tunnel initialization took longer than expected.")

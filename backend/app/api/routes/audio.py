@@ -89,7 +89,15 @@ async def upload_recording(
         )
 
     await pipeline.drain_ingest(runtime)
-    segments = await _ingest(runtime, raw, ai_update="none")
+    segments = []
+    try:
+        segments = await _ingest(runtime, raw, ai_update="none")
+    except Exception as exc:
+        if runtime.segment_sequence > 0:
+            logger.warning("tail_ingest_skipped_on_silence", extra={"session_id": str(session.id), "error": str(exc)})
+        else:
+            raise
+
     if not segments and runtime.segment_sequence == 0:
         # An empty transcript is reported honestly rather than as a success, so
         # the UI never implies speech was captured when none was recognised.

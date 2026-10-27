@@ -58,8 +58,8 @@ async def create_session(payload: SessionCreate, db: DbSession, principal: Curre
         audio_source=payload.audio_source or _DEFAULT_AUDIO_SOURCE[payload.mode],
         ai_mode=settings.effective_ai_mode.value,
         model_name=(
-            "gemini-3.5-flash-lite"
-            if payload.model_name and "gemini" in payload.model_name.lower() and any(legacy in payload.model_name.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview"))
+            payload.model_name
+            if payload.model_name
             else (
                 payload.model_name
                 or (settings.gemini_model if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)

@@ -77,8 +77,8 @@ class GeminiProvider(LLMProvider):
     ) -> None:
         self.api_key = api_key if api_key is not None else settings.gemini_api_key
         raw_model = model or settings.gemini_model
-        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
-            raw_model = "gemini-3.5-flash-lite"
+        if raw_model and any(legacy in raw_model.lower() for legacy in ("gemini-1.", "gemini-2.0")):
+            raw_model = "gemini-3.7-flash"
         self.model = raw_model
         self.timeout_seconds = timeout_seconds or settings.gemini_timeout_seconds
         self.max_retries = max_retries or settings.gemini_max_retries
@@ -119,28 +119,36 @@ class GeminiProvider(LLMProvider):
         return self._client
 
     @staticmethod
-    def _config(response_schema: Any) -> Any:
+    def _config(response_schema: Any, model_name: str = "") -> Any:
         from google.genai import types  # noqa: PLC0415
 
-        return types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            temperature=settings.gemini_temperature,
-            response_mime_type="application/json",
-            response_schema=response_schema,
-            candidate_count=1,
-            max_output_tokens=3072,
-        )
+        kwargs: dict[str, Any] = {
+            "system_instruction": SYSTEM_INSTRUCTION,
+            "temperature": settings.gemini_temperature,
+            "response_mime_type": "application/json",
+            "response_schema": response_schema,
+            "candidate_count": 1,
+            "max_output_tokens": 3072,
+        }
+        target = (model_name or settings.gemini_model).lower()
+        if "3.7" in target or "2.5" in target or "3.8" in target:
+            try:
+                kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+
+        return types.GenerateContentConfig(**kwargs)
 
     # ------------------------------------------------------------------- calls
     async def _generate(self, prompt: str, response_schema: Any, *, purpose: str) -> tuple[Any, LLMCallStats]:
         client = self._ensure_client()
-        config = self._config(response_schema)
+        config = self._config(response_schema, self.model)
         attempts = 0
         started = time.perf_counter()
         last_error: LLMError | None = None
 
         candidate_models = [self.model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"):
+        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
         max_attempts = self.max_retries
@@ -296,7 +304,7 @@ class GeminiProvider(LLMProvider):
         )
         started = time.perf_counter()
         candidate_models = [self.model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"):
+        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 

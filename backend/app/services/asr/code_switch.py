@@ -98,6 +98,11 @@ CLINICAL_COLLOQUIALISMS: dict[str, str] = {
     "mudhugu vali": "back pain",
     "thookam varala": "insomnia",
     "pasi illa": "loss of appetite",
+    "sorvu": "fatigue / weakness",
+    "sorva irukku": "fatigue",
+    "asathi": "fatigue / lethargy",
+    "asathiya irukku": "fatigue / lethargy",
+    "udambu sorvu": "fatigue / weakness",
     # Telugu / Telugu-English
     "thala noppi": "headache",
     "tala noppi": "headache",

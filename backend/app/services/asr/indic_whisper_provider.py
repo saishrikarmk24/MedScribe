@@ -67,12 +67,14 @@ class IndicWhisperASRProvider(FasterWhisperProvider):
             extra={"model": self.indic_model_name, "device": device_str, "provider": self.name},
         )
         try:
+            hf_token = settings.huggingface_token or os.environ.get("HF_TOKEN") or None
             self._pipeline = pipeline(
                 "automatic-speech-recognition",
                 model=self.indic_model_name,
                 device=device_str,
                 torch_dtype=torch_dtype,
                 chunk_length_s=30,
+                token=hf_token,
             )
             self._engine_type = "transformers"
             return self._pipeline

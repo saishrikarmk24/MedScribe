@@ -105,7 +105,7 @@ class ClinicalTextSplitter:
         return result
 
 # Fast, reliable model for turn splitting text classification.
-_DEFAULT_MODEL = "gemini-3.5-flash-lite"
+_DEFAULT_MODEL = "gemini-3.7-flash"
 
 
 class GeminiTextSplitter:
@@ -132,7 +132,7 @@ class GeminiTextSplitter:
     def __init__(self, *, model: str | None = None) -> None:
         chosen = model or _DEFAULT_MODEL
         if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
-            chosen = "gemini-3.5-flash-lite"
+            chosen = "gemini-3.7-flash"
         self._model = chosen
         self._client: Any | None = None
 

@@ -5,7 +5,7 @@ cd /d "%~dp0"
 echo ===========================================================================
 echo       SIMS HOSPITAL - VOICESCRIBE AI CLINICAL WORKSTATION
 echo ===========================================================================
-echo [1/3] Starting embedded clinical engine (Google Gemini 3.5 Flash Lite)...
+echo [1/3] Starting embedded clinical engine (Google Gemini 3.7 Flash)...
 
 start /B "" "..\backend\.venv\Scripts\python.exe" "desktop_runner.py"
 

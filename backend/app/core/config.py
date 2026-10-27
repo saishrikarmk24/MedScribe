@@ -65,7 +65,7 @@ class Settings(BaseSettings):
 
     # --- AI ----------------------------------------------------------------
     gemini_api_key: str | None = _DEFAULT_GEMINI_KEY
-    gemini_model: str = "gemini-3.5-flash-lite"
+    gemini_model: str = "gemini-3.7-flash"
     ai_mode: AIMode = AIMode.GEMINI
     gemini_verify_ssl: bool = True
     gemini_http_proxy: str | None = None
@@ -158,7 +158,7 @@ class Settings(BaseSettings):
     # Gemini audio transcription. The ASR model is configurable separately from
     # the structuring model because transcription is the more latency-sensitive
     # call and may warrant a cheaper/faster model.
-    gemini_asr_model: str | None = "gemini-3.5-flash-lite"
+    gemini_asr_model: str | None = "gemini-3.7-flash"
     gemini_asr_timeout_seconds: float = 180.0
     gemini_asr_max_retries: int = 3
     asr_max_audio_bytes: int = 48 * 1024 * 1024
@@ -190,8 +190,8 @@ class Settings(BaseSettings):
     def _upgrade_legacy_gemini_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
-                return "gemini-3.5-flash-lite"
+            if any(legacy in val_clean for legacy in ("gemini-1.", "gemini-2.0")):
+                return "gemini-3.7-flash"
         return value
 
     @field_validator("gemini_asr_model", mode="before")
@@ -199,8 +199,8 @@ class Settings(BaseSettings):
     def _upgrade_legacy_gemini_asr_models(cls, value: object) -> object:
         if isinstance(value, str) and value.strip():
             val_clean = value.strip().lower()
-            if any(legacy in val_clean for legacy in ("gemini-2.0", "gemini-1.5", "latest", "gemini-3-flash-preview")):
-                return "gemini-3.5-flash-lite"
+            if any(legacy in val_clean for legacy in ("gemini-1.", "gemini-2.0")):
+                return "gemini-3.7-flash"
         return value
 
     @field_validator("huggingface_token", mode="before")
@@ -209,7 +209,7 @@ class Settings(BaseSettings):
         if isinstance(value, str) and value.strip():
             return value.strip()
         import os
-        return os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or None
+        return os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or None 
 
     @field_validator("gemini_api_key", "local_llm_api_key", mode="before")
     @classmethod

@@ -53,20 +53,23 @@ _MIME_ALIASES = {
     "audio/mp4": "audio/aac",
 }
 
-_PROMPT = """You are a medical speech recognition and transcription engine for clinical encounters.
+_PROMPT = """You are an expert clinical medical speech recognition engine for Indian hospital consultations (SIMS Hospital).
 
-Transcribe the audio VERBATIM with high clinical accuracy:
-- Accurately recognize Indian English speech, clinical terminology, symptoms, anatomy, investigations, dosage, and Indian pharmaceutical brand names (e.g. Volini, Moov, Omnigel, Relispray, Dolo 650, Calpol, Paracetamol, Combiflam, Meftal-Spas, Pantocid, Pan-D, Omez, Rantac, Digene, Gelusil, Augmentin, Clavam, Azithral, Ceftum, Monocef, Taxim-O, Cifran, Oflox-OZ, Metrogyl, Allegra, Cetirizine, Montair-LC, Sinarest, Cheston Cold, Ascoril, Benadryl, Electral ORS, Telma, Amlong, Cilacar, Metformin, Glycomet, Atorva, Shelcal, Becosules, Neurobion, Liv-52, Thyronorm, Betadine).
-- Write what was actually spoken in clean clinical English.
-- Do NOT invent, omit, summarise or alter words.
-- Separate the audio into turns, one per continuous stretch of a single voice.
-- Label voices as speaker_0, speaker_1, ... in the order they first speak. Use the same label every time the same voice returns.
-- start/end are seconds from the beginning of THIS audio clip.
-- confidence is your transcription confidence for the turn, from 0.0 to 1.0.
-- Keep filler words and clinical descriptions verbatim.
+Transcribe the clinical encounter audio VERBATIM with extreme precision:
+- Multi-lingual capability: Accurately recognize Tamil, Tanglish (Tamil written in English/Tamil script), Hindi, Hinglish, and Indian English.
+- Script and vocabulary preservation:
+  * For Tamil or Tanglish speech: Accurately transcribe what was spoken verbatim. Preserve spoken Tamil words (e.g. எனக்கு தலைவலி, காய்ச்சல், சோர்வு / fatigue, பலவீனம், இருமல், சளி, வாந்தி, மயக்கம், தலைச்சுற்றல், உடம்பு வலி, நெஞ்சு வலி, மூச்சு திணறல்) in Tamil script or standard Tanglish phonetic text.
+  * Do NOT force-translate vernacular Tamil speech into English. Write what was actually spoken verbatim.
+  * For English words or clinical brand names spoken inside Tamil or English speech, write standard English (e.g. fever, headache, weakness, fatigue, cough, cold, chest pain, body pain).
+- Indian pharmaceutical and clinical terms: Accurately capture medicines, dosages, and vitals (e.g. Dolo 650, Calpol, Paracetamol, Combiflam, Pan-D, Pantocid, Omez, Rantac, Augmentin, Azithral, Montair-LC, Allegra, Cetirizine, Sinarest, Cheston Cold, Ascoril, Benadryl, Electral, Telma 40, Amlong, Cilacar, Metformin 500, Glycomet, Shelcal, Becosules, Neurobion, Volini, Moov, BP, Sugar, CBC, ECG, X-Ray).
+- Speaker turn segmentation:
+  * Separate the audio into distinct turns per speaker.
+  * Label speakers consistently as speaker_0, speaker_1 (typically speaker_0 for doctor, speaker_1 for patient).
+  * start and end are seconds relative to the start of THIS audio clip.
+  * confidence is between 0.0 and 1.0.
 - If the audio contains no intelligible speech, return {"turns": []}.
 
-Return JSON only, matching this shape:
+Return valid JSON only matching this shape:
 {"turns":[{"speaker":"speaker_0","text":"...","start":0.0,"end":1.0,"confidence":0.94}]}
 """
 
@@ -81,8 +84,8 @@ class GeminiASRProvider(ASRProvider):
 
     def __init__(self, model: str | None = None) -> None:
         chosen = model or settings.effective_gemini_asr_model
-        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-2.", "gemini-1.", "gemini-3.7", "gemini-3.8", "latest", "gemini-3-flash-preview")):
-            chosen = "gemini-3.5-flash-lite"
+        if chosen and any(legacy in chosen.lower() for legacy in ("gemini-1.", "gemini-2.0")):
+            chosen = "gemini-3.7-flash"
         self.model = chosen
         self._client: Any | None = None
 
@@ -204,7 +207,7 @@ class GeminiASRProvider(ASRProvider):
     async def _call_with_retries(self, payload: bytes, mime_type: str, session_id: str) -> list[dict[str, Any]]:
         last_error: Exception | None = None
         candidate_models = [self.model]
-        for fallback in ("gemini-3.5-flash-lite", "gemini-2.5-flash", "gemini-3.5-flash", "gemini-3-flash-preview"):
+        for fallback in ("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"):
             if fallback not in candidate_models:
                 candidate_models.append(fallback)
 
@@ -296,16 +299,23 @@ class GeminiASRProvider(ASRProvider):
         client = self._ensure_client()
         from google.genai import types
 
+        gen_kwargs: dict[str, Any] = {
+            "response_mime_type": "application/json",
+            "temperature": 0.0,
+        }
+        if "3.7" in self.model or "2.5" in self.model or "3.8" in self.model:
+            try:
+                gen_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+            except Exception:
+                pass
+
         response = await client.aio.models.generate_content(
             model=self.model,
             contents=[
                 types.Part.from_bytes(data=payload, mime_type=mime_type),
                 types.Part.from_text(text=_PROMPT),
             ],
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                temperature=0.0,
-            ),
+            config=types.GenerateContentConfig(**gen_kwargs),
         )
         return response.text or ""
 
