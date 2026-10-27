@@ -72,7 +72,9 @@ if not os.path.exists(WORK_DIR):
     subprocess.run(["git", "clone", REPO_URL, WORK_DIR], check=True)
 else:
     print(f"      Updating {WORK_DIR} from {REPO_URL}...")
-    subprocess.run(["git", "-C", WORK_DIR, "pull", "origin", "main"], check=True)
+    subprocess.run(["git", "-C", WORK_DIR, "remote", "set-url", "origin", REPO_URL], check=False)
+    subprocess.run(["git", "-C", WORK_DIR, "fetch", "origin", "main"], check=True)
+    subprocess.run(["git", "-C", WORK_DIR, "reset", "--hard", "origin/main"], check=True)
 
 print("      Installing Python backend requirements...")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", f"{WORK_DIR}/backend/requirements.txt"])
@@ -122,7 +124,7 @@ try:
         data=json.dumps({"model": "gemma4:e4b", "prompt": "Clinical consultation initialized.", "keep_alive": -1}).encode("utf-8"),
         headers={"Content-Type": "application/json"}
     )
-    urllib.request.urlopen(warmup_req, timeout=45)
+    urllib.request.urlopen(warmup_req, timeout=90)
     print("   ✅ GPU 0 primed: Gemma 4 locked into VRAM permanently!")
 except Exception as e:
     print(f"   ⚠️ GPU 0 warmup note: {e}")
@@ -147,22 +149,47 @@ except Exception as e:
 
 # 3. Warm up GPU 1 (AI4Bharat IndicConformer-600M for Tamil/Hindi on GPU 1)
 print("   [3/3] Priming GPU 1: Loading AI4Bharat IndicConformer-600M (Tamil & Hindi)...")
+indic_warmup_code = """
+import os, sys, torch
+import numpy as np
+from transformers import AutoModel
+
+token = os.environ.get('HUGGINGFACE_TOKEN') or os.environ.get('HF_TOKEN') or None
+print('      [IndicConformer] Downloading & caching weights from HuggingFace...')
+model = AutoModel.from_pretrained(
+    'ai4bharat/indic-conformer-600m-multilingual',
+    trust_remote_code=True,
+    token=token
+)
+dummy = torch.zeros((1, 16000), dtype=torch.float32)
+with torch.inference_mode():
+    res = model(dummy, 'ta', 'ctc')
+print('      [IndicConformer] Inference test passed!')
+"""
+
+env_indic = os.environ.copy()
+env_indic["CUDA_VISIBLE_DEVICES"] = "1"
+if hf_token:
+    env_indic["HUGGINGFACE_TOKEN"] = hf_token
+    env_indic["HF_TOKEN"] = hf_token
+
 try:
-    indic_warmup_cmd = (
-        f"{sys.executable} -c \""
-        "import os, numpy as np, torch; "
-        f"os.environ['CUDA_VISIBLE_DEVICES'] = '1'; "
-        f"os.environ['HUGGINGFACE_TOKEN'] = '{hf_token}'; "
-        f"os.environ['HF_TOKEN'] = '{hf_token}'; "
-        "from transformers import AutoModel; "
-        f"model = AutoModel.from_pretrained('ai4bharat/indic-conformer-600m-multilingual', trust_remote_code=True, token='{hf_token}'); "
-        "dummy = torch.zeros((1, 16000), dtype=torch.float32); "
-        "with torch.inference_mode(): "
-        "    res = model(dummy, 'ta', 'ctc'); "
-        "print('IndicConformer primed successfully!')\""
+    proc = subprocess.run(
+        [sys.executable, "-c", indic_warmup_code],
+        env=env_indic,
+        capture_output=True,
+        text=True,
+        check=True
     )
-    subprocess.run(indic_warmup_cmd, shell=True, check=True)
+    if proc.stdout:
+        print(proc.stdout.strip())
     print("   ✅ GPU 1 primed: IndicConformer locked into VRAM for Tamil & Hindi recognition!")
+except subprocess.CalledProcessError as e:
+    err_msg = (e.stderr or e.stdout or str(e)).strip()
+    print(f"   ⚠️ IndicConformer pre-warm warning:\n      {err_msg}")
+    if "gated" in err_msg.lower() or "401" in err_msg or "403" in err_msg:
+        print("      👉 ACTION REQUIRED: Visit https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual and click 'Agree and access repository' with your Hugging Face account!")
+    print("      (Note: Faster-Whisper Large-v3-Turbo will handle transcription seamlessly as baseline)")
 except Exception as e:
     print(f"   ⚠️ IndicConformer pre-warm warning (will fall back gracefully if needed): {e}")
 

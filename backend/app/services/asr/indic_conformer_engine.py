@@ -85,12 +85,10 @@ class IndicConformerEngine:
                 )
             except Exception as exc:
                 detail = str(exc) or type(exc).__name__
-                if not settings.huggingface_token and (
-                    "not a valid model identifier" in detail or "401" in detail or "gated" in detail.lower()
-                ):
+                if "401" in detail or "403" in detail or "gated" in detail.lower() or "restricted" in detail.lower():
                     detail = (
-                        f"{detail} — set Kaggle secret HUGGINGFACE_TOKEN after accepting "
-                        f"https://huggingface.co/{self.model_name}"
+                        f"{detail} — Please ensure you have accepted the model license at "
+                        f"https://huggingface.co/{self.model_name} with your Hugging Face account and provided a valid HUGGINGFACE_TOKEN."
                     )
                 self.failed = detail
                 raise IndicConformerEngineUnavailable(self.failed) from exc
