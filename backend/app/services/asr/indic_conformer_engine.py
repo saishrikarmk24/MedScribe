@@ -79,7 +79,9 @@ class IndicConformerEngine:
             logger.info("loading_indic_conformer", extra={"model": self.model_name, "decoder": self.decoder})
             try:
                 model = AutoModel.from_pretrained(
-                    self.model_name, trust_remote_code=True, token=settings.huggingface_token or None
+                    self.model_name,
+                    trust_remote_code=True,
+                    token=settings.huggingface_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or None,
                 )
             except Exception as exc:
                 detail = str(exc) or type(exc).__name__

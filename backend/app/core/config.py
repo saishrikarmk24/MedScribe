@@ -203,7 +203,15 @@ class Settings(BaseSettings):
                 return "gemini-3.5-flash-lite"
         return value
 
-    @field_validator("gemini_api_key", "huggingface_token", "local_llm_api_key", mode="before")
+    @field_validator("huggingface_token", mode="before")
+    @classmethod
+    def _resolve_hf_token(cls, value: object) -> object:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        import os
+        return os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN") or None
+
+    @field_validator("gemini_api_key", "local_llm_api_key", mode="before")
     @classmethod
     def _blank_to_none(cls, value: object) -> object:
         if isinstance(value, str) and not value.strip():
