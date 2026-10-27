@@ -137,10 +137,10 @@ class IndicConformerASRProvider(ASRProvider):
             io.BytesIO(wav_bytes),
             language=self.target_language,
             initial_prompt=self.prompt_biasing,
-            beam_size=5,
+            beam_size=max(1, settings.asr_beam_size),
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
-            word_timestamps=True,
+            word_timestamps=False,
         )
 
         detected_lang = getattr(info, "language", self.target_language or "unknown")

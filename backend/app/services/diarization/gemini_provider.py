@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 class GeminiDiarizationProvider(DiarizationService):
     name = "gemini_diarization"
     is_mock = False
+    needs_asr_hints = True
 
     async def diarize(self, audio: AudioFrame) -> list[DiarizationTurn]:
         turns = audio.hints.get(DIARIZATION_HINT_KEY)

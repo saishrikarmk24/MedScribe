@@ -25,7 +25,12 @@ from app.core.config import settings
 from app.core.logging import get_logger, track_duration
 from app.services.asr.base import ASRProvider
 from app.services.asr.code_switch import LanguagePolicy, clean_asr_text, parse_languages, style_prompt
-from app.services.asr.hypothesis import DecodeQuality, conformer_plausible, tamil_is_garbled, whisper_problem
+from app.services.asr.hypothesis import (
+    DecodeQuality,
+    conformer_plausible,
+    tamil_is_garbled,
+    whisper_problem,
+)
 from app.services.asr.indic_conformer_engine import IndicConformerEngine
 from app.services.asr.medical_normalizer import normalize_medical_transcript
 from app.services.types import ASRSegment, AudioFrame
@@ -41,16 +46,53 @@ _SPLIT_SILENCE_MS = 500
 # detection both need a few seconds of context to be reliable.
 _MERGE_GAP_SECONDS = 1.0
 _MIN_CONTEXT_SECONDS = 2.5
-_MAX_UTTERANCE_SECONDS = 25.0
+_MAX_UTTERANCE_SECONDS = 30.0
 _MIN_UTTERANCE_SECONDS = 0.3
 _PAD_SECONDS = 0.2
-# Re-decoded at higher temperature when the greedy/beam result trips the
-# compression-ratio or log-probability thresholds.
-_TEMPERATURES = (0.0, 0.2, 0.4, 0.6)
+# One extra temperature only if the first decode trips compression/log-prob gates.
+_TEMPERATURES = (0.0, 0.4)
 # Below this share of English, an utterance counts as Indian-language speech.
 _ENGLISH_HEAVY = 0.5
+# Enough English mixed in that IndicConformer may drop drug names / Latin terms.
+_MIXED_LOW = 0.28
 _CONFORMER_CONFIDENCE = 0.85
 _REJECTED_CONFIDENCE = 0.35
+_LID_PREFIX_SECONDS = 2.0
+
+
+def pick_mixed_hypothesis(
+    whisper_text: str,
+    problem: str | None,
+    conformer_text: str | None,
+) -> str:
+    """Choose Tanglish/Hinglish output: native script when Whisper failed, else
+    the hypothesis that actually contains both scripts (English drugs + vernacular)."""
+    whisper_text = (whisper_text or "").strip()
+    conformer_text = (conformer_text or "").strip()
+    if not conformer_text:
+        return "whisper"
+    if problem or not whisper_text:
+        return "conformer"
+
+    def _native(text: str) -> int:
+        return sum(1 for char in text if char.isalpha() and not char.isascii())
+
+    def _latin(text: str) -> int:
+        return sum(1 for char in text if char.isascii() and char.isalpha())
+
+    whisper_native, conformer_native = _native(whisper_text), _native(conformer_text)
+    whisper_latin, conformer_latin = _latin(whisper_text), _latin(conformer_text)
+    whisper_mixed = whisper_native >= 6 and whisper_latin >= 6 and not tamil_is_garbled(whisper_text)
+    if whisper_mixed and whisper_native + 8 >= conformer_native:
+        return "whisper"
+    # Keep a clean English/Tanglish decode so brand names are not dropped.
+    if whisper_latin >= 12 and not tamil_is_garbled(whisper_text):
+        return "whisper"
+    if conformer_native >= whisper_native + 6 and conformer_latin + 4 >= whisper_latin:
+        return "conformer"
+    if conformer_native > whisper_native:
+        return "conformer"
+    return "whisper"
 
 # One model per (name, device, compute type) for the whole process. Loading
 # large-v3-turbo takes several seconds and ~1.5 GB, so it must not be repeated
@@ -231,6 +273,9 @@ class FasterWhisperProvider(ASRProvider):
     def _transcribe_sync(self, model: Any, frame: AudioFrame) -> list[ASRSegment]:
         import numpy as np  # type: ignore
 
+        if 0 < frame.speech_ratio < 0.03:
+            return []
+
         audio = np.frombuffer(frame.pcm, dtype=np.int16).astype(np.float32) / 32768.0
         rate = frame.sample_rate or SAMPLE_RATE
         if rate != SAMPLE_RATE:
@@ -248,13 +293,41 @@ class FasterWhisperProvider(ASRProvider):
 
             source, reason = "whisper", "English-heavy utterance"
             conformer_language = language if self._conformer_handles(language) else None
-            if conformer_language and english_share < _ENGLISH_HEAVY:
+            mixed = bool(conformer_language) and _MIXED_LOW <= english_share < _ENGLISH_HEAVY
+            if conformer_language and english_share < _ENGLISH_HEAVY and not mixed:
                 text = self._second_pass_text(piece, conformer_language, duration)
                 if text:
                     self._append_conformer(results, frame, text, offset, offset + duration, conformer_language)
                     source, reason = "indic_conformer", "Indian-language utterance"
                 else:
                     reason = "second recogniser returned nothing usable"
+
+            if mixed:
+                conformer_text = self._second_pass_text(piece, conformer_language, duration)
+                segments, prompt = self._decode_whisper(model, piece, language)
+                raw_text = " ".join((segment.text or "").strip() for segment in segments).strip()
+                problem = whisper_problem(raw_text, language, duration, self._quality(segments))
+                chosen = pick_mixed_hypothesis(raw_text, problem, conformer_text)
+                if chosen == "conformer" and conformer_text:
+                    self._append_conformer(results, frame, conformer_text, offset, offset + duration, conformer_language)
+                    source, reason = "indic_conformer", "mixed utterance: native-script hypothesis"
+                else:
+                    self._append_whisper(results, frame, segments, prompt, offset, language, problem)
+                    source, reason = "whisper", "mixed utterance: kept Latin + vernacular"
+                logger.debug(
+                    "asr_utterance",
+                    extra={
+                        "session_id": frame.session_id,
+                        "start": round(offset, 2),
+                        "end": round(offset + duration, 2),
+                        "language": language,
+                        "language_confidence": language_confidence,
+                        "english_share": round(english_share, 3),
+                        "source": source,
+                        "reason": reason,
+                    },
+                )
+                continue
 
             if source == "whisper":
                 segments, prompt = self._decode_whisper(model, piece, language)
@@ -305,25 +378,27 @@ class FasterWhisperProvider(ASRProvider):
 
     def _decode_whisper(self, model: Any, piece: Any, language: str | None) -> tuple[list[Any], str | None]:
         prompt = self._prompt_for(language)
-        # Tamil / Hindi need a wider beam than English; turbo is otherwise too greedy.
-        beam = max(settings.asr_beam_size, 5) if language in ("ta", "hi", "te", "ml") else settings.asr_beam_size
         task = getattr(settings, "asr_task", "transcribe")
-        segments, _info = model.transcribe(
-            piece,
-            language=language,
-            task=task,
-            beam_size=beam,
-            vad_filter=False,
-            word_timestamps=True,
-            condition_on_previous_text=False,
-            initial_prompt=prompt,
-            temperature=list(_TEMPERATURES),
-            compression_ratio_threshold=2.4,
-            log_prob_threshold=-1.0,
-            no_speech_threshold=0.6,
-            repetition_penalty=1.05,
-            no_repeat_ngram_size=0,
-        )
+        beam = 1 if language == "en" else max(1, settings.asr_beam_size)
+        kwargs: dict[str, Any] = {
+            "language": language,
+            "task": task,
+            "beam_size": beam,
+            "vad_filter": False,
+            "word_timestamps": False,
+            "condition_on_previous_text": False,
+            "initial_prompt": prompt,
+            "temperature": list(_TEMPERATURES),
+            "compression_ratio_threshold": 2.4,
+            "log_prob_threshold": -1.0,
+            "no_speech_threshold": 0.6,
+            "without_timestamps": True,
+        }
+        try:
+            segments, _info = model.transcribe(piece, **kwargs)
+        except TypeError:
+            kwargs.pop("without_timestamps", None)
+            segments, _info = model.transcribe(piece, **kwargs)
         kept = [
             segment
             for segment in segments
@@ -453,8 +528,17 @@ class FasterWhisperProvider(ASRProvider):
     def _language_for(self, model: Any, piece: Any, duration: float) -> tuple[str | None, float]:
         if self.fixed_language:
             return self.fixed_language, 1.0
+        if duration < 1.5 and self.policy.previous:
+            return self.policy.previous, self.policy.last_scores.get(self.policy.previous, 0.0)
+        probe = piece
         try:
-            _language, _probability, probabilities = model.detect_language(piece)
+            n_prefix = int(_LID_PREFIX_SECONDS * SAMPLE_RATE)
+            if duration > _LID_PREFIX_SECONDS + 0.5 and len(piece) > n_prefix:
+                probe = piece[:n_prefix]
+        except TypeError:
+            probe = piece
+        try:
+            _language, _probability, probabilities = model.detect_language(probe)
         except Exception:
             logger.warning("asr_language_detection_failed", exc_info=True)
             return self.policy.previous, 0.0

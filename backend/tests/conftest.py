@@ -64,6 +64,10 @@ async def database():
         if runtime is not None:
             runtime.stopped = True
             runtime.resume_event.set()
+            if runtime.ingest_chain and not runtime.ingest_chain.done():
+                runtime.ingest_chain.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await runtime.ingest_chain
             if runtime.task and not runtime.task.done():
                 runtime.task.cancel()
                 with suppress(asyncio.CancelledError, Exception):

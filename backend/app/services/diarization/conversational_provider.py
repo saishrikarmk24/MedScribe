@@ -29,6 +29,8 @@ Return JSON only: {"labels": [{"index": 0, "speaker": "speaker_0"}, {"index": 1,
 
 
 class ConversationalDiarizationProvider(DiarizationService):
+    needs_asr_hints = True
+
     name = "conversational"
     is_mock = False
 

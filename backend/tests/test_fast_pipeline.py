@@ -146,6 +146,8 @@ async def test_live_pieces_draft_in_background_and_stop_reuses_the_note(client, 
     piece = await client.post(f"{upload}?final=false", files=wav)
     assert piece.status_code == 200, piece.text
     assert piece.json()["ok"] is True
+    assert runtime.ingest_chain is not None
+    await runtime.ingest_chain
     assert runtime.ai_task is not None
     await runtime.ai_task
     assert calls == [1], "a piece is drafted in the background"

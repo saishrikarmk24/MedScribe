@@ -80,13 +80,16 @@ async def upload_recording(
     if raw is None:  # pragma: no cover - provider always yields once
         raise HTTPException(status_code=400, detail="Could not read the uploaded recording.")
 
-    segments = await _ingest(runtime, raw, ai_update="none" if final else "background")
     if not final:
+        pipeline.schedule_ingest(runtime, raw, ai_update="background")
         return Acknowledgement(
             ok=True,
-            message=f"Transcribed {len(segments)} segment(s).",
-            detail={"segments": [segment.ref for segment in segments], "asr_provider": runtime.asr.name},
+            message="Transcribing in the background.",
+            detail={"segments": [], "asr_provider": runtime.asr.name, "queued": True},
         )
+
+    await pipeline.drain_ingest(runtime)
+    segments = await _ingest(runtime, raw, ai_update="none")
     if not segments and runtime.segment_sequence == 0:
         # An empty transcript is reported honestly rather than as a success, so
         # the UI never implies speech was captured when none was recognised.

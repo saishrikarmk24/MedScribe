@@ -141,6 +141,7 @@ class SessionRuntime:
     note_digest: int | None = None
     ai_task: asyncio.Task | None = None
     ai_rerun: bool = False
+    ingest_chain: asyncio.Task | None = None
 
     def __post_init__(self) -> None:
         self.resume_event.set()
@@ -262,6 +263,7 @@ class SessionPipeline:
         await self._emit_session_status(runtime, session)
 
         # Final structuring pass over the complete transcript.
+        await self.drain_ingest(runtime)
         await self.run_ai_update(runtime, force=True, final=True)
 
         factory = get_session_factory()
@@ -286,8 +288,37 @@ class SessionPipeline:
 
     def discard(self, session_id: str) -> None:
         runtime = self._runtimes.pop(str(session_id), None)
-        if runtime is not None and runtime.ai_task and not runtime.ai_task.done():
+        if runtime is None:
+            return
+        if runtime.ingest_chain and not runtime.ingest_chain.done():
+            runtime.ingest_chain.cancel()
+        if runtime.ai_task and not runtime.ai_task.done():
             runtime.ai_task.cancel()
+
+    def schedule_ingest(self, runtime: SessionRuntime, raw: RawAudio, *, ai_update: str) -> asyncio.Task:
+        """Queue one buffer behind any in-flight piece so live uploads stay ordered
+        without the HTTP request waiting on Whisper."""
+        previous = runtime.ingest_chain
+
+        async def _run() -> list[AssembledSegment]:
+            if previous is not None:
+                try:
+                    await previous
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001 - previous piece must not block this one
+                    pass
+            return await self.ingest_audio(runtime, raw, ai_update=ai_update)
+
+        runtime.ingest_chain = asyncio.create_task(_run(), name=f"ingest-{runtime.reference}")
+        return runtime.ingest_chain
+
+    async def drain_ingest(self, runtime: SessionRuntime) -> None:
+        task = runtime.ingest_chain
+        if task is None or task.done():
+            return
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001 - drain must not raise into Stop
+            logger.exception("ingest_chain_failed", extra={"session_id": runtime.session_id})
 
     # ------------------------------------------------------------------ ingest
     async def ingest_audio(
@@ -361,22 +392,32 @@ class SessionPipeline:
             },
         )
 
-        # ASR runs before diarization: providers that transcribe and attribute
-        # speakers in one pass (Gemini) publish their turns onto the frame for
-        # the diarization stage to consume.
-        asr_segments = await self._transcribe(runtime, frame)
+        # Local pitch clustering can run beside Whisper. Text-based diarizers
+        # (Gemini speaker labels, conversational split) need the transcript first.
+        if runtime.diarizer.needs_asr_hints:
+            asr_segments = await self._transcribe(runtime, frame)
+            turns = await self._diarize_with_transcript(runtime, frame, asr_segments)
+        else:
+            asr_segments, turns = await asyncio.gather(
+                self._transcribe(runtime, frame),
+                self._diarize(runtime, frame),
+            )
         if not asr_segments:
             return []
 
-        # Publish ASR segments as hints for text-based diarization providers
-        frame.hints['asr_segments'] = [
-            {'text': seg.text, 'start_time': seg.start_time, 'end_time': seg.end_time, 'confidence': seg.confidence}
+        return await self._assemble_and_store(runtime, frame, asr_segments, turns, chunk_id, ai_update)
+
+    async def _diarize_with_transcript(self, runtime: SessionRuntime, frame: AudioFrame, asr_segments: list) -> list:
+        frame.hints["asr_segments"] = [
+            {
+                "text": seg.text,
+                "start_time": seg.start_time,
+                "end_time": seg.end_time,
+                "confidence": seg.confidence,
+            }
             for seg in asr_segments
         ]
-
-        turns = await self._diarize(runtime, frame)
-
-        return await self._assemble_and_store(runtime, frame, asr_segments, turns, chunk_id, ai_update)
+        return await self._diarize(runtime, frame)
 
     async def _diarize(self, runtime: SessionRuntime, frame: AudioFrame) -> list:
         await self._emit_stage(runtime, ProcessingStage.DIARIZATION, "Detecting speakers")

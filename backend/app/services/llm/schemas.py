@@ -93,6 +93,15 @@ class NoteUpdate(BaseModel):
     change_summary: str = ""
 
 
+class ClinicalBundle(BaseModel):
+    """Single Gemini/Ollama JSON object: SOAP note plus entities."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    note: GeneratedNote = Field(default_factory=GeneratedNote)
+    entities: list[ExtractedEntity] = Field(default_factory=list)
+
+
 def coerce_llm_payload(payload: Any, schema: type[BaseModel]) -> Any:
     """Fill fields smaller models often omit (confidence, status, note wrapper)."""
     if isinstance(payload, list) and schema is ExtractionResult:

@@ -12,6 +12,8 @@ class DiarizationService(abc.ABC):
 
     name: str = "base"
     is_mock: bool = False
+    # True when speaker labels come from the transcript, so ASR must finish first.
+    needs_asr_hints: bool = False
 
     @abc.abstractmethod
     async def diarize(self, audio: AudioFrame) -> list[DiarizationTurn]:

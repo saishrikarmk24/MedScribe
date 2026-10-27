@@ -8,7 +8,11 @@ import pytest
 
 from app.core.config import ASRProviderName, settings
 from app.services.asr.code_switch import LanguagePolicy, style_prompt
-from app.services.asr.faster_whisper_provider import FasterWhisperProvider, merge_spans
+from app.services.asr.faster_whisper_provider import (
+    FasterWhisperProvider,
+    merge_spans,
+    pick_mixed_hypothesis,
+)
 from app.services.asr.hypothesis import DecodeQuality, foreign_script_share, tamil_is_garbled, whisper_problem
 from app.services.asr.indic_conformer_engine import IndicConformerEngine
 from app.services.types import AudioFrame
@@ -26,6 +30,7 @@ class FakeWhisper:
         self.segments = segments
         self.decoded_languages: list[str | None] = []
         self.detections = 0
+        self.last_kwargs: dict = {}
 
     def detect_language(self, _piece):
         self.detections += 1
@@ -35,7 +40,9 @@ class FakeWhisper:
     def transcribe(self, _piece, **kwargs):
         assert kwargs["condition_on_previous_text"] is False
         assert "hotwords" not in kwargs
+        assert kwargs.get("word_timestamps") is False
         self.decoded_languages.append(kwargs["language"])
+        self.last_kwargs = kwargs
         return iter(self.segments), None
 
 
@@ -79,6 +86,31 @@ def test_tamil_utterance_goes_to_indic_conformer_without_running_whisper() -> No
     assert [s.text for s in segments] == ["எனக்கு ரெண்டு நாளா காய்ச்சல் இருக்கு"]
     assert segments[0].language == "ta"
     assert (segments[0].start_time, segments[0].end_time) == (10.0, 14.0)
+
+
+def test_mixed_tanglish_runs_both_engines_and_keeps_readable_english() -> None:
+    conformer = FakeConformer("எனக்கு காய்ச்சல்")
+    whisper = FakeWhisper(
+        [("ta", 0.55), ("en", 0.45)],
+        [_segment("I have fever, taking Dolo 650")],
+    )
+    segments = _provider(conformer)._transcribe_sync(whisper, _frame())
+    assert conformer.calls == ["ta"]
+    assert whisper.decoded_languages == ["ta"]
+    assert "Dolo 650" in segments[0].text
+
+
+def test_pick_mixed_prefers_conformer_when_whisper_is_garbled() -> None:
+    assert pick_mixed_hypothesis("x x x", "garbled Tamil", "எனக்கு தலைவலி இருக்கு") == "conformer"
+    assert pick_mixed_hypothesis("I have fever taking Dolo 650", None, "காய்ச்சல்") == "whisper"
+
+
+def test_whisper_decode_skips_word_timestamps_and_wide_beams() -> None:
+    whisper = FakeWhisper([("en", 0.9), ("ta", 0.1)], [_segment("Fever for two days.")])
+    _provider(None)._transcribe_sync(whisper, _frame())
+    assert whisper.last_kwargs["word_timestamps"] is False
+    assert whisper.last_kwargs["beam_size"] <= 2
+    assert whisper.last_kwargs["without_timestamps"] is True
 
 
 def test_english_utterance_stays_with_whisper() -> None:

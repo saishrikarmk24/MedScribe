@@ -53,7 +53,7 @@ from app.services.llm.prompts import (
     build_note_prompt,
 )
 from app.services.llm.json_parse import extract_json_object
-from app.services.llm.schemas import ExtractionResult, NoteUpdate, coerce_llm_payload
+from app.services.llm.schemas import ClinicalBundle, ExtractionResult, NoteUpdate, coerce_llm_payload
 
 logger = get_logger(__name__)
 
@@ -128,6 +128,7 @@ class GeminiProvider(LLMProvider):
             response_mime_type="application/json",
             response_schema=response_schema,
             candidate_count=1,
+            max_output_tokens=3072,
         )
 
     # ------------------------------------------------------------------- calls
@@ -289,7 +290,9 @@ class GeminiProvider(LLMProvider):
             system_instruction=LOCAL_SYSTEM_INSTRUCTION,
             temperature=self.temperature,
             response_mime_type="application/json",
+            response_schema=ClinicalBundle,
             candidate_count=1,
+            max_output_tokens=3072,
         )
         started = time.perf_counter()
         candidate_models = [self.model]
@@ -307,7 +310,11 @@ class GeminiProvider(LLMProvider):
                     client.aio.models.generate_content(model=current_model, contents=prompt, config=config),
                     timeout=self.timeout_seconds,
                 )
-                text = (getattr(response, "text", None) or "").strip()
+                parsed = getattr(response, "parsed", None)
+                if isinstance(parsed, ClinicalBundle):
+                    text = parsed.model_dump_json()
+                else:
+                    text = (getattr(response, "text", None) or "").strip()
                 if not text:
                     raise LLMInvalidOutput("Gemini returned empty text.")
                 duration_ms = (time.perf_counter() - started) * 1000
@@ -387,7 +394,9 @@ class GeminiProvider(LLMProvider):
                         on_partial_note(sections)
 
             return ExtractionResponse(result=extraction_result, stats=stats)
-        except Exception as exc:  # noqa: BLE001
+        except (LLMRateLimited, LLMTimeout, LLMAuthError, LLMUnavailable, LLMNotConfigured) as exc:
+            raise
+        except Exception as exc:  # noqa: BLE001 - malformed JSON still gets one schema-constrained retry
             logger.warning("gemini_single_pass_failed_falling_back_to_two_pass", extra={"error": str(exc)})
 
         prompt = build_extraction_prompt(
