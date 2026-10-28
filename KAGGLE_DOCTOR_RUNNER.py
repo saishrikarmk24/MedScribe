@@ -80,11 +80,28 @@ print("      Installing Python backend requirements...")
 subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", f"{WORK_DIR}/backend/requirements.txt"])
 
 print("      Installing IndicConformer ONNX-GPU & Transformers dependencies...")
-subprocess.run([
-    sys.executable, "-m", "pip", "install", "-q",
+# faster-whisper pulls the CPU onnxruntime wheel. IndicConformer needs the GPU
+# build, and the two packages cannot both be installed. 1.20.1 has no Kaggle wheel.
+subprocess.run(
+    [sys.executable, "-m", "pip", "uninstall", "-y", "onnxruntime", "onnxruntime-gpu"],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+indic_packages = [
     "transformers", "torchaudio", "huggingface_hub", "soundfile",
-    "onnx==1.20.1", "onnxruntime-gpu==1.20.1",
-])
+    "onnx==1.20.1", "onnxruntime-gpu==1.20.2",
+]
+installed = subprocess.run([sys.executable, "-m", "pip", "install", "-q", *indic_packages])
+if installed.returncode != 0:
+    print("      onnxruntime-gpu 1.20.2 was unavailable. Installing the newest GPU build...")
+    subprocess.run(
+        [
+            sys.executable, "-m", "pip", "install", "-q",
+            "transformers", "torchaudio", "huggingface_hub", "soundfile",
+            "onnx==1.20.1", "onnxruntime-gpu",
+        ],
+        check=True,
+    )
 
 # Configure environment for dual-GPU operation:
 # Ollama runs on GPU 0.
