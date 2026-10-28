@@ -58,9 +58,10 @@ _TEMPERATURES = (0.0, 0.4)
 _ENGLISH_HEAVY = 0.70
 # Enough English mixed in that IndicConformer may drop drug names / Latin terms.
 _MIXED_LOW = 0.28
-# Whisper's language id is English-heavy on Tamil. This is still enough of an
-# Indian-language score to run IndicConformer beside Whisper.
-_INDIC_WORTH_A_SECOND_PASS = 0.12
+# Whisper's language id is English-heavy on Tamil. A small Tamil or Hindi
+# score is still enough to run IndicConformer beside Whisper. Below this,
+# the turn is treated as English and the second model is not called.
+_INDIC_WORTH_A_SECOND_PASS = 0.06
 _CONFORMER_CONFIDENCE = 0.85
 _REJECTED_CONFIDENCE = 0.35
 # Language id looks at several windows. The first two seconds are often
@@ -74,6 +75,21 @@ _MEDICAL_STOP = frozenset(
         "taking", "since", "days", "fever", "pain", "headache", "cough", "cold",
     }
 )
+_QUESTION_START = re.compile(
+    r"^(?:how|what|when|where|why|which|did|do|does|is|are|was|were|can|could|would|have you|has the|any)\b",
+    re.IGNORECASE,
+)
+
+
+def _english_question(text: str) -> bool:
+    stripped = (text or "").strip()
+    return stripped.endswith("?") or bool(_QUESTION_START.match(stripped))
+
+
+def _native_clinical(text: str) -> bool:
+    from app.services.asr.code_switch import NATIVE_CLINICAL_TERMS
+
+    return any(term in (text or "") for term in NATIVE_CLINICAL_TERMS)
 
 
 def pick_mixed_hypothesis(
@@ -101,9 +117,13 @@ def pick_mixed_hypothesis(
     whisper_mixed = whisper_native >= 6 and whisper_latin >= 6 and not tamil_is_garbled(whisper_text)
     if whisper_mixed and whisper_native + 8 >= conformer_native:
         return "whisper"
-    # A full Tamil or Hindi sentence must win over an English translation of it.
-    # A short native fragment still loses to a Whisper line that kept the drug name.
-    if conformer_native >= 18 and whisper_native < 8:
+    # A doctor question in clear English stays as spoken. A patient line that
+    # Whisper rewrote in English loses to a real Tamil or Hindi reading.
+    if _english_question(whisper_text):
+        return "whisper"
+    if whisper_native < 8 and _native_clinical(conformer_text):
+        return "conformer"
+    if conformer_native >= 12 and whisper_native < 8:
         return "conformer"
     # Keep a clean English/Tanglish decode so brand names are not dropped.
     if whisper_latin >= 12 and not tamil_is_garbled(whisper_text):

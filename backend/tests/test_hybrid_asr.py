@@ -102,7 +102,8 @@ def test_mixed_tanglish_runs_both_engines_and_keeps_readable_english() -> None:
 
 def test_pick_mixed_prefers_conformer_when_whisper_is_garbled() -> None:
     assert pick_mixed_hypothesis("x x x", "garbled Tamil", "எனக்கு தலைவலி இருக்கு") == "conformer"
-    assert pick_mixed_hypothesis("I have fever taking Dolo 650", None, "காய்ச்சல்") == "whisper"
+    assert pick_mixed_hypothesis("I have fever taking Dolo 650", None, "காய்ச்சல்") == "conformer"
+    assert pick_mixed_hypothesis("How long have you had this headache?", None, "எனக்கு தலைவலி இருக்கு") == "whisper"
 
 
 def test_pick_mixed_prefers_a_full_tamil_sentence_over_an_english_translation() -> None:
@@ -172,9 +173,33 @@ def test_english_utterance_stays_with_whisper() -> None:
     whisper = FakeWhisper([("en", 0.9), ("ta", 0.1)], [_segment("I have had fever for two days.")])
     segments = _provider(conformer)._transcribe_sync(whisper, _frame())
 
-    assert conformer.calls == []
+    assert conformer.calls == ["ta"]
     assert whisper.decoded_languages == ["en"]
     assert segments[0].text == "I have had fever for two days."
+    assert "unused" not in segments[0].text
+
+
+def test_english_doctor_question_is_not_replaced_by_tamil() -> None:
+    conformer = FakeConformer("எனக்கு ஐந்து நாள் ஆச்சு தலைவலி காய்ச்சல் இருக்கு")
+    whisper = FakeWhisper(
+        [("en", 0.9), ("ta", 0.08)],
+        [_segment("How long have you had this headache?")],
+    )
+    segments = _provider(conformer)._transcribe_sync(whisper, _frame())
+    assert segments[0].text == "How long have you had this headache?"
+
+
+def test_english_rewrite_of_a_tamil_complaint_is_replaced() -> None:
+    tamil = "எனக்கு ரெண்டு நாளா காய்ச்சல் இருக்கு"
+    conformer = FakeConformer(tamil)
+    whisper = FakeWhisper(
+        [("en", 0.88), ("ta", 0.08)],
+        [_segment("I have fever for two days, taking Dolo 650")],
+    )
+    segments = _provider(conformer)._transcribe_sync(whisper, _frame())
+    assert "காய்ச்சல்" in segments[0].text
+    assert "Dolo" in segments[0].text
+    assert "650" in segments[0].text
 
 
 def test_whisper_repetition_loop_is_rescued_by_the_second_recogniser() -> None:

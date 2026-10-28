@@ -12,7 +12,13 @@ import re
 from typing import Any, Iterable
 
 from app.models.enums import EntityType
-from app.services.asr.code_switch import CLINICAL_COLLOQUIALISMS, NATIVE_CLINICAL_TERMS
+from app.services.asr.code_switch import (
+    CLINICAL_COLLOQUIALISMS,
+    NATIVE_CLINICAL_TERMS,
+    _HINDI_LOANWORDS,
+    _TAMIL_LOANWORDS,
+    colloquial_glossary,
+)
 from app.services.asr.medical_lexicon import PHARMACEUTICAL_DIRECTORY
 from app.services.llm.schemas import ExtractedEntity, GeneratedNote, NoteUpdate
 from app.services.nlp.terminology import _SYNONYMS
@@ -53,6 +59,17 @@ _KNOWN_DRUG_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Framing words in an English note. They are not evidence, and they must not
+# make a faithful translation of a Tamil line look unsupported.
+_NARRATIVE_FILLER = {
+    "patient", "reports", "reported", "states", "stated", "says", "said", "denies",
+    "denied", "doctor", "advised", "advice", "taking", "taken", "take", "with",
+    "from", "that", "this", "have", "has", "had", "been", "being", "since",
+    "severe", "mild", "moderate", "history", "present", "complaint", "associated",
+    "including", "about", "after", "before", "during", "visit", "clinic",
+    "consultation", "known", "over", "into", "also", "then", "were", "was",
+}
+
 # Hedging and framing words that carry no diagnostic content of their own.
 _ASSESSMENT_FILLER = {
     "likely", "possible", "possibly", "probable", "probably", "suspected", "suspect",
@@ -76,6 +93,16 @@ _VERNACULAR_EXTRA: dict[str, str] = {
     "jor": "fever",
     "pani": "fever",
     "jwaram": "fever",
+    "சைனஸ்": "sinusitis",
+    "சைனசைட்டிஸ்": "sinusitis",
+    "தொண்டை": "throat",
+    "இருமல்": "cough",
+    "காய்ச்சல்": "fever",
+    "ஜுரம்": "fever",
+    "தலைவலி": "headache",
+    "வாந்தி": "vomiting",
+    "மூச்சு": "breathlessness",
+    "மாத்திரை": "tablet",
 }
 
 # Types that must never appear unless the transcript supports them.
@@ -135,6 +162,8 @@ def _synonym_pairs() -> dict[str, str]:
     pairs.update(_VERNACULAR_EXTRA)
     for phrase, options in _COLLOQUIAL_OPTIONS.items():
         pairs.setdefault(phrase, options[0])
+    for spoken, english in {**_TAMIL_LOANWORDS, **_HINDI_LOANWORDS}.items():
+        pairs.setdefault(spoken, english.lower())
     return pairs
 
 
@@ -222,6 +251,26 @@ def filter_ungrounded_entities(
     return kept, dropped
 
 
+# Time and frequency words. A Tamil line rarely contains the English word
+# "days", so these must not make a real prescription look unsupported.
+_DURATION_WORDS = {
+    "days", "day", "weeks", "week", "months", "month", "years", "year",
+    "twice", "daily", "once", "thrice", "three", "four", "five", "seven",
+    "morning", "night", "food", "times",
+}
+
+
+def _content_tokens(text: str) -> list[str]:
+    return [
+        tok
+        for tok in _TOKEN_RE.findall(text.lower())
+        if len(tok) >= 4
+        and tok not in _NARRATIVE_FILLER
+        and tok not in _ASSESSMENT_FILLER
+        and tok not in _DURATION_WORDS
+    ]
+
+
 def _clause_supported(clause: str, transcript: str) -> bool:
     text = clause.strip()
     if not text:
@@ -236,6 +285,10 @@ def _clause_supported(clause: str, transcript: str) -> bool:
         return True
     if _DRUG_HINT.search(text):
         return False
+    content = _content_tokens(lowered)
+    if content:
+        matched = sum(1 for tok in content if tok in haystack)
+        return matched / len(content) >= 0.5
     tokens = [tok for tok in _TOKEN_RE.findall(lowered) if len(tok) >= 4]
     if not tokens:
         return True
@@ -257,13 +310,20 @@ def _filter_section_text(text: str, transcript: str, *, medication_section: bool
     return ". ".join(kept) + ("." if text.rstrip().endswith(".") else "")
 
 
+def _drug_spoken(name: str, haystack: str) -> bool:
+    if name in haystack:
+        return True
+    words = [part for part in re.split(r"[\s\-]+", name) if part.isalpha()]
+    return bool(words) and all(re.search(rf"\b{re.escape(part)}\b", haystack) for part in words)
+
+
 def unspoken_drugs(text: str, transcript: str) -> list[str]:
     """Drug names in ``text`` that the transcript never mentions (brand/generic aware)."""
     haystack = expand_clinical_text(transcript)
     missing: list[str] = []
     for match in _KNOWN_DRUG_RE.finditer(text or ""):
         name = match.group(1).lower()
-        if name in haystack or name in missing:
+        if _drug_spoken(name, haystack) or name in missing:
             continue
         missing.append(name)
     return missing
@@ -315,6 +375,57 @@ def _filter_clauses(text: str, keep) -> str:
     if "\n" in text:
         return "\n".join(kept)
     return ". ".join(kept) + ("." if text.rstrip().endswith(".") else "")
+
+
+_NEGATED_LINE = ("denies", "denied", "இல்லை", "नहीं")
+_NEGATED_WORD = re.compile(r"\b(?:nahi|illa)\b", re.IGNORECASE)
+
+
+def _spoken_symptom_readings(segments: list[dict[str, Any]]) -> list[str]:
+    """English names of symptoms that were actually said, skipping a denied line."""
+    readings: list[str] = []
+    seen: set[str] = set()
+    for segment in segments:
+        text = str(segment.get("text") or "")
+        lowered = text.lower()
+        if any(flag in lowered for flag in _NEGATED_LINE) or _NEGATED_WORD.search(lowered):
+            continue
+        for english in colloquial_glossary(text).values():
+            reading = english.split("/")[0].strip()
+            key = reading.lower()
+            if reading and key not in seen:
+                seen.add(key)
+                readings.append(reading)
+    return readings
+
+
+def _restore_spoken_symptoms(update: NoteUpdate, segments: list[dict[str, Any]]) -> None:
+    """Put symptoms the recording actually contained back when the local model omitted them.
+
+    Chief complaint and the history are the patient's story, so a Tamil line the
+    model skipped or replaced must still appear. Plan and assessment are left
+    to the doctor-speech check above.
+    """
+    readings = _spoken_symptom_readings(segments)
+    if not readings:
+        return
+    note = update.note
+    covered = f"{note.chief_complaint.text} {note.history_of_present_illness.text}".lower()
+    missing = [reading for reading in readings if reading.lower() not in covered]
+    if not missing:
+        return
+    complaint = note.chief_complaint
+    if not (complaint.text or "").strip() or not any(reading.lower() in complaint.text.lower() for reading in readings):
+        complaint.text = ", ".join(missing[:4])
+        complaint.text = complaint.text[:1].upper() + complaint.text[1:]
+    else:
+        complaint.text = f"{complaint.text.rstrip('. ')}. Also reported: {', '.join(missing[:4])}."
+    history = note.history_of_present_illness
+    sentence = f"The patient reports {', '.join(missing[:4])}."
+    if not (history.text or "").strip():
+        history.text = sentence
+    elif not any(reading.lower() in history.text.lower() for reading in readings):
+        history.text = f"{sentence} {history.text}".strip()
 
 
 def _clear(section) -> None:
@@ -377,3 +488,5 @@ def purge_note_hallucinations(
         section.text = _filter_section_text(section.text, support, medication_section=False)
         if not section.text.strip():
             _clear(section)
+
+    _restore_spoken_symptoms(update, segments)

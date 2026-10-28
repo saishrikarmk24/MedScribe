@@ -90,9 +90,9 @@ _ROLE_NAMES = {
 _PROMPT_RULES = """\
 RULES (all mandatory):
 1. Document only facts stated in the transcript. Never add a symptom, finding, vital sign, drug, dose, diagnosis, test or advice that no speaker said.
-2. The transcript may mix English with Hindi, Tamil or Telugu (Hinglish / Tanglish / Telugu-English) and contains Indian brand names. You MUST translate every clinical fact and symptom into standard international medical English. The final note must be 100% in English (no vernacular script or transliteration in the note). Keep brand names as spoken and add the generic in brackets only when certain, e.g. "Dolo 650 (paracetamol)".
+2. The transcript may mix English with Hindi, Tamil or Telugu (Hinglish / Tanglish / Telugu-English) and contains Indian brand names. You MUST translate every clinical fact and symptom into standard international medical English. A parenthetical English reading after a line is the meaning of the words just spoken: use that reading, and do not substitute a different symptom. The final note must be 100% in English (no vernacular script or transliteration in the note). Name the symptom, site and duration whenever they were spoken. Keep brand names as spoken and add the generic in brackets only when certain, e.g. "Dolo 650 (paracetamol)".
 3. Lines are labelled Doctor / Patient. Patient statements are subjective history. assessment, plan and follow_up come ONLY from what the Doctor said.
-4. Leave out every section that was not discussed; it is recorded as "Not mentioned" automatically. In particular:
+4. Leave out every section that was not discussed. Never write "Not mentioned", "N/A" or "nil" inside the JSON; an omitted section is shown as "Not mentioned" by the application. In particular:
    - physical_examination: only if examination findings or vital values were spoken.
    - assessment: only if the doctor voiced an impression or diagnosis.
    - plan: only if the doctor ordered a test, prescribed a medicine or gave advice. Never write a prescription the doctor did not say.
@@ -142,10 +142,30 @@ def _speaker_name(segment: dict[str, Any]) -> str:
     return f"Speaker {int(match.group(1)) + 1}" if match else "Speaker"
 
 
+def _with_english_reading(text: str) -> str:
+    """Put the clinical English beside a Tamil or Hindi line so a small local model translates it."""
+    glossary = colloquial_glossary(text)
+    if not glossary:
+        return text
+    readings: list[str] = []
+    seen: set[str] = set()
+    lowered = text.lower()
+    for english in glossary.values():
+        reading = english.split("/")[0].strip()
+        key = reading.lower()
+        if not reading or key in seen or key in lowered:
+            continue
+        seen.add(key)
+        readings.append(reading)
+    if not readings:
+        return text
+    return f"{text} ({'; '.join(readings)})"
+
+
 def format_transcript(segments: list[dict[str, Any]]) -> str:
     """``[seg_001] Doctor: How long have you had this headache?``"""
     return "\n".join(
-        f"[{s.get('ref', 'seg')}] {_speaker_name(s)}: {str(s.get('text', '')).strip()}"
+        f"[{s.get('ref', 'seg')}] {_speaker_name(s)}: {_with_english_reading(str(s.get('text', '')).strip())}"
         for s in segments
         if str(s.get("text", "")).strip()
     )
