@@ -131,23 +131,57 @@ CORS_ORIGINS=*
 LOCAL_LLM_WARMUP_ON_STARTUP=true
 ASR_WARMUP_ON_STARTUP=true
 LOCAL_LLM_KEEP_ALIVE=24h
+LOCAL_LLM_TIMEOUT_SECONDS=300
 """)
+
+def _gpu_memory_mib():
+    try:
+        raw = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+            text=True,
+        )
+        return [int(line.strip()) for line in raw.splitlines() if line.strip()]
+    except Exception:
+        return []
+
+
+def _prime_gemma():
+    """Load Gemma and keep it resident. The first load of the 5.5 GB model on a T4
+    often takes several minutes; a 90s request used to abort it and leave GPU 0 empty."""
+    print("   [1/3] Priming GPU 0: Loading Gemma 4 into VRAM (first load can take several minutes)...")
+    payload = json.dumps({
+        "model": "gemma4:e4b",
+        "prompt": "Clinical consultation initialized.",
+        "keep_alive": -1,
+        "stream": False,
+        "options": {"num_predict": 8},
+    }).encode("utf-8")
+    for attempt in range(1, 3):
+        try:
+            request = urllib.request.Request(
+                "http://127.0.0.1:11434/api/generate",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(request, timeout=600) as response:
+                response.read()
+        except Exception as exc:
+            print(f"      … load request {attempt} still working ({exc}). Checking the GPU.")
+        for _ in range(12):
+            used = _gpu_memory_mib()
+            gpu0 = used[0] if used else 0
+            if gpu0 > 2000:
+                print(f"   ✅ GPU 0 primed: Gemma 4 is using {gpu0} MiB and will stay loaded.")
+                return True
+            time.sleep(10)
+    used = _gpu_memory_mib()
+    print(f"   ⚠️ Gemma did not stay on GPU 0 (memory now: {used or 'unknown'}). The first clinical note can time out.")
+    return False
 
 # [6/7] Pre-warm Dual GPUs before starting server
 print("\n⚡ PRE-WARMING DUAL GPUs (PRIMING VRAM FOR ZERO-LATENCY CLINICAL INFERENCE)...")
 
-# 1. Warm up GPU 0 (Ollama Gemma in VRAM with keep_alive=-1)
-print("   [1/3] Priming GPU 0: Loading Gemma 4 into VRAM...")
-try:
-    warmup_req = urllib.request.Request(
-        "http://127.0.0.1:11434/api/generate",
-        data=json.dumps({"model": "gemma4:e4b", "prompt": "Clinical consultation initialized.", "keep_alive": -1}).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
-    )
-    urllib.request.urlopen(warmup_req, timeout=90)
-    print("   ✅ GPU 0 primed: Gemma 4 locked into VRAM permanently!")
-except Exception as e:
-    print(f"   ⚠️ GPU 0 warmup note: {e}")
+_prime_gemma()
 
 # 2. Warm up GPU 1 (Whisper Large-v3-Turbo on GPU 1)
 print("   [2/3] Priming GPU 1: Loading Faster-Whisper Large-v3-Turbo...")
@@ -181,7 +215,7 @@ model = AutoModel.from_pretrained(
     trust_remote_code=True,
     token=token
 )
-dummy = torch.zeros((1, 16000), dtype=torch.float32)
+dummy = torch.zeros((1, 48000), dtype=torch.float32)
 with torch.inference_mode():
     res = model(dummy, 'ta', 'rnnt')
 print('      [IndicConformer] Inference test passed!')
@@ -223,14 +257,31 @@ backend_env["CUDA_VISIBLE_DEVICES"] = "1"
 backend_env["HUGGINGFACE_TOKEN"] = hf_token
 backend_env["HF_TOKEN"] = hf_token
 
+server_log = open("/kaggle/working/voicescribe-server.log", "w", buffering=1)
 subprocess.Popen(
     [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
     cwd=f"{WORK_DIR}/backend",
     env=backend_env,
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL
+    stdout=server_log,
+    stderr=subprocess.STDOUT,
 )
-time.sleep(4)
+print("      Waiting until the clinical server answers...")
+server_ready = False
+for _ in range(40):
+    try:
+        urllib.request.urlopen("http://127.0.0.1:8000/api/health", timeout=3).read()
+        server_ready = True
+        break
+    except Exception:
+        time.sleep(3)
+if not server_ready:
+    print("   ⚠️ The clinical server did not answer on port 8000. Last log lines:")
+    try:
+        with open("/kaggle/working/voicescribe-server.log", encoding="utf-8", errors="replace") as log_file:
+            tail = log_file.readlines()[-30:]
+        print("".join(tail))
+    except Exception as exc:
+        print(f"      (could not read the server log: {exc})")
 
 print("      Launching Cloudflare HTTPS tunnel...")
 tunnel_proc = subprocess.Popen(
