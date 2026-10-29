@@ -71,7 +71,7 @@ export function NewSessionPage() {
         pushToast({
           kind: 'success',
           title: `${session.reference} started`,
-          detail: status?.ai?.model ? `Note model: ${status.ai.model}` : 'Google Gemini active',
+          detail: status?.ai?.model ? `Note model: ${status.ai.model}` : 'Clinical note model ready',
         })
       } else {
         pushToast({ kind: 'success', title: `${session.reference} created` })
@@ -199,7 +199,7 @@ export function NewSessionPage() {
               <div className="px-5 pb-5">
                 <ActiveEngines status={status} />
                 <p className="field-hint">
-                  Google Gemini Cloud API active. Encrypted audio streaming and automated note generation.
+                  Models are set in the server .env, not per consultation.
                 </p>
               </div>
             </Card>

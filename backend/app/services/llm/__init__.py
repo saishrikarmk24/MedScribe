@@ -31,38 +31,26 @@ _fallback: DeterministicLLMProvider | None = None
 
 
 def build_llm_provider(model_name: str | None = None) -> LLMProvider:
-    """Gemini when configured or in gemini mode; Local LLM when local/ollama requested; otherwise mock."""
-    default_model = (
-        settings.gemini_model
-        if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)
-        else settings.local_llm_model
-    )
-    target_model = model_name or default_model
-    target_lower = target_model.lower()
-    from app.services.llm.gemini_request import canonical_gemini_model
-
-    if "gemini" in target_lower:
-        target_model = canonical_gemini_model(target_model)
-        target_lower = target_model.lower()
-
+    """Gemini in gemini mode; the local model when local/ollama was requested; otherwise mock."""
     # Mock mode and sessions pinned to the rule engine must never reach a real model:
     # the local provider's fallback chain would otherwise load one on this machine.
-    if settings.effective_ai_mode is AIMode.MOCK or target_model == DeterministicLLMProvider.model:
+    if settings.effective_ai_mode is AIMode.MOCK or model_name == DeterministicLLMProvider.model:
         return DeterministicLLMProvider()
 
-    if ("gemini" in target_lower or settings.effective_ai_mode is AIMode.GEMINI) and settings.gemini_configured:
+    if settings.effective_ai_mode is AIMode.GEMINI and settings.gemini_configured:
         from app.services.llm.gemini_provider import GeminiProvider
+        from app.services.llm.gemini_request import canonical_gemini_model
 
-        return GeminiProvider(model=target_model if "gemini" in target_lower else settings.gemini_model)
+        target_model = model_name or settings.gemini_model
+        if "gemini" not in target_model.lower():
+            target_model = settings.gemini_model
+        return GeminiProvider(model=canonical_gemini_model(target_model))
 
-    if (
-        any(k in target_lower for k in ("gemma", "qwen", "llama", "mistral", "phi", "deepseek"))
-        or settings.effective_ai_mode in (AIMode.LOCAL, AIMode.OLLAMA)
-        or not settings.gemini_configured
-    ):
+    if settings.effective_ai_mode in (AIMode.LOCAL, AIMode.OLLAMA) or not settings.gemini_configured:
         from app.services.llm.local_provider import LocalLLMProvider
 
-        if "gemini" in target_lower:
+        target_model = model_name or settings.local_llm_model
+        if "gemini" in target_model.lower():
             target_model = settings.local_llm_model
         return LocalLLMProvider(model=target_model)
 

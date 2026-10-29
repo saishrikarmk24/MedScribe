@@ -236,12 +236,15 @@ class Settings(BaseSettings):
 
     @property
     def effective_ai_mode(self) -> AIMode:
+        # An explicit offline choice wins even when a Gemini key is present.
+        # The key is baked into this file for the online app, and that used to
+        # force every Kaggle server onto Gemini Cloud.
         if self.ai_mode is AIMode.MOCK:
             return AIMode.MOCK
-        if self.gemini_configured or self.ai_mode is AIMode.GEMINI:
-            return AIMode.GEMINI
         if self.ai_mode in (AIMode.LOCAL, AIMode.OLLAMA):
             return self.ai_mode
+        if self.ai_mode is AIMode.GEMINI:
+            return AIMode.GEMINI
         return AIMode.GEMINI if self.gemini_configured else AIMode.LOCAL
 
     @property

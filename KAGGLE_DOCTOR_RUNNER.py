@@ -109,6 +109,7 @@ if installed.returncode != 0:
 with open(f"{WORK_DIR}/backend/.env", "w") as f:
     f.write(f"""
 AI_MODE=local
+GEMINI_API_KEY=
 LOCAL_LLM_API=ollama
 LOCAL_LLM_MODEL=gemma4:e4b
 ASR_PROVIDER=faster_whisper
@@ -254,6 +255,8 @@ subprocess.run(["nvidia-smi", "--query-gpu=index,name,memory.used,memory.total",
 print("\n[7/7] Starting VoiceScribe backend on GPU 1 (port 8000)...")
 backend_env = os.environ.copy()
 backend_env["CUDA_VISIBLE_DEVICES"] = "1"
+backend_env["AI_MODE"] = "local"
+backend_env["GEMINI_API_KEY"] = ""
 backend_env["HUGGINGFACE_TOKEN"] = hf_token
 backend_env["HF_TOKEN"] = hf_token
 

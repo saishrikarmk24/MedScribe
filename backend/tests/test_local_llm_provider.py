@@ -21,6 +21,15 @@ async def test_build_llm_provider_returns_local(monkeypatch) -> None:
     assert provider.is_mock is False
 
 
+def test_local_mode_ignores_a_configured_gemini_key(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "ai_mode", AIMode.LOCAL)
+    monkeypatch.setattr(settings, "gemini_api_key", "present")
+    assert settings.effective_ai_mode is AIMode.LOCAL
+    provider = build_llm_provider()
+    assert isinstance(provider, LocalLLMProvider)
+    assert not provider.model.lower().startswith("gemini")
+
+
 @pytest.mark.asyncio
 async def test_local_llm_extract_entities_success(monkeypatch) -> None:
     provider = LocalLLMProvider(base_url="http://mock-ollama:11434/v1", model="qwen2.5:7b")

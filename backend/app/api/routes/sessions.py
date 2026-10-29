@@ -59,12 +59,12 @@ async def create_session(payload: SessionCreate, db: DbSession, principal: Curre
         ai_mode=settings.effective_ai_mode.value,
         model_name=(
             payload.model_name
-            if payload.model_name
-            else (
-                payload.model_name
-                or (settings.gemini_model if (settings.effective_ai_mode is AIMode.GEMINI or settings.gemini_configured)
-                    else (settings.local_llm_model if settings.effective_ai_mode.value in ("local", "ollama")
-                    else "medscribe-rules-v1"))
+            or (
+                settings.gemini_model
+                if settings.effective_ai_mode is AIMode.GEMINI
+                else settings.local_llm_model
+                if settings.effective_ai_mode.value in ("local", "ollama")
+                else "medscribe-rules-v1"
             )
         ),
         asr_provider=payload.asr_provider or (settings.asr_provider.value if hasattr(settings.asr_provider, "value") else str(settings.asr_provider)),

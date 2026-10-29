@@ -50,6 +50,16 @@ describe('ActiveEngines', () => {
     expect(screen.getByText('401 gated repo')).toBeInTheDocument()
   })
 
+  it('keeps the offline note model when a Gemini key is also present', () => {
+    const offline = status({ model: 'ai4bharat/indic-conformer-600m-multilingual', decoder: 'rnnt', status: 'loaded' })
+    offline.ai = { provider: 'local', model: 'gemma4:e4b', mode: 'local', gemini_configured: true }
+    render(<ActiveEngines status={offline} />)
+    expect(screen.getByText('gemma4:e4b')).toBeInTheDocument()
+    expect(screen.getByText('Ollama')).toBeInTheDocument()
+    expect(screen.getByText('Faster-Whisper large-v3-turbo (float16 on cuda)')).toBeInTheDocument()
+    expect(screen.queryByText('Google Gemini (Cloud)')).not.toBeInTheDocument()
+  })
+
   it('renders Google Gemini Cloud engine badges when running in cloud mode', () => {
     const cloudStatus: SystemStatus = {
       environment: 'production',

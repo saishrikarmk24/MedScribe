@@ -57,8 +57,9 @@ export function ActiveEngines({ status }: { status: SystemStatus | null }) {
   const asr = status.providers?.asr || {}
   const second = asr.second_pass
   const llmMock = Boolean(ai.mock) || ai.mode === 'mock'
-  const isGeminiAI = !llmMock && (ai.mode === 'gemini' || ai.provider === 'gemini' || String(ai.model || '').toLowerCase().startsWith('gemini') || Boolean(ai.gemini_configured))
-  const isGeminiASR = asr.name === 'gemini' || asr.name === 'gemini_asr' || isGeminiAI
+  const explicitLocal = ai.mode === 'local' || ai.mode === 'ollama'
+  const isGeminiAI = !llmMock && !explicitLocal && (ai.mode === 'gemini' || ai.provider === 'gemini' || String(ai.model || '').toLowerCase().startsWith('gemini'))
+  const isGeminiASR = asr.name === 'gemini' || asr.name === 'gemini_asr'
   const fallbacks = (pipeline.llm_fallback_chain ?? '').split('→').map((m) => m.trim()).filter((m) => m && m !== ai.model)
 
   let aiBadge = isGeminiAI ? 'Google Gemini (Cloud)' : 'Ollama'
