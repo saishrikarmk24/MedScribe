@@ -119,7 +119,7 @@ export function ServerOfflineScreen({
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
                 <div
                   className="h-full bg-brand transition-all duration-1000 ease-linear"
-                  style={{ width: `${((5 - retryCountdown) / 5) * 100}%` }}
+                  style={{ width: `${((8 - Math.min(retryCountdown, 8)) / 8) * 100}%` }}
                 />
               </div>
             </div>

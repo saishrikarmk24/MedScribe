@@ -3,7 +3,7 @@
  * through the backend, which owns the API key.
  */
 
-import { getApiUrl } from '@/services/serverConfig'
+import { beginServerWork, endServerWork, getApiUrl } from '@/services/serverConfig'
 import type {
   AudioChunk,
   AuthResponse,
@@ -195,21 +195,35 @@ export const api = {
   /** `final: false` streams one piece of a live take; the note is drafted in the background. */
   uploadRecording: async (sessionId: string, file: File, options: { final?: boolean } = {}) => {
     const form = new FormData()
-    form.append('file', file)
     const authHeaders: Record<string, string> = {}
     if (identity.email) authHeaders['X-User-Email'] = identity.email
     if (identity.role) authHeaders['X-User-Role'] = identity.role
     const final = options.final ?? true
-    const response = await fetch(getApiUrl(`/sessions/${sessionId}/audio/upload?final=${final}`), {
-      method: 'POST',
-      body: form,
-      headers: authHeaders,
-    })
-    if (!response.ok) {
-      const body = await response.json().catch(() => ({ detail: response.statusText }))
-      throw new ApiError(response.status, String(body.detail ?? 'Upload failed'))
+    const url = getApiUrl(`/sessions/${sessionId}/audio/upload?final=${final}`)
+    beginServerWork()
+    try {
+      let lastError: Error | null = null
+      let response: Response | null = null
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        form.set('file', file)
+        try {
+          response = await fetch(url, { method: 'POST', body: form, headers: authHeaders })
+          break
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error('Failed to fetch')
+          if (attempt === 2) break
+          await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)))
+        }
+      }
+      if (!response) throw lastError ?? new Error('Failed to fetch')
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ detail: response.statusText }))
+        throw new ApiError(response.status, String(body.detail ?? 'Upload failed'))
+      }
+      return (await response.json()) as { ok: boolean; message: string | null; detail: Record<string, unknown> }
+    } finally {
+      endServerWork()
     }
-    return (await response.json()) as { ok: boolean; message: string | null; detail: Record<string, unknown> }
   },
   transcribeClip: async (file: File | Blob) => {
     const form = new FormData()

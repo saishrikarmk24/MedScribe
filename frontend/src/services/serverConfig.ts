@@ -121,6 +121,21 @@ export async function fetchBeaconServerUrl(_forceUpdate = true): Promise<string 
 }
 
 let currentServerUrl = initServerUrl()
+let serverWork = 0
+
+/** The recorder holds the tunnel while a piece is uploading. Health checks must not
+ *  treat a busy tunnel as a dead server. */
+export function beginServerWork(): void {
+  serverWork += 1
+}
+
+export function endServerWork(): void {
+  serverWork = Math.max(0, serverWork - 1)
+}
+
+export function serverIsBusy(): boolean {
+  return serverWork > 0
+}
 
 export function getServerBaseUrl(): string {
   return currentServerUrl

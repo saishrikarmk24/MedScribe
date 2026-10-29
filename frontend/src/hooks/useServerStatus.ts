@@ -4,6 +4,7 @@ import {
   fetchBeaconServerUrl,
   getServerBaseUrl,
   isLocalDemoHost,
+  serverIsBusy,
   setServerBaseUrl,
   subscribeServerUrl,
 } from '@/services/serverConfig'
@@ -17,7 +18,8 @@ export interface ServerStatusState {
   retryCountdown: number
 }
 
-const CHECK_INTERVAL_SEC = 5
+const CHECK_INTERVAL_SEC = 8
+const FAILURES_BEFORE_OFFLINE = 3
 
 export function useServerStatus() {
   const [isOnline, setIsOnline] = useState<boolean>(true)
@@ -28,9 +30,16 @@ export function useServerStatus() {
   const [retryCountdown, setRetryCountdown] = useState<number>(CHECK_INTERVAL_SEC)
 
   const inFlightRef = useRef<boolean>(false)
+  const failuresRef = useRef(0)
 
-  const performCheck = useCallback(async (targetUrl?: string) => {
-    if (inFlightRef.current) return isOnline
+  const performCheck = useCallback(async (targetUrl?: string, force = false) => {
+    if (inFlightRef.current) return failuresRef.current < FAILURES_BEFORE_OFFLINE
+    // A piece upload or the note request already owns the tunnel. One dropped
+    // health check in that window is not the server going away.
+    if (!force && !targetUrl && serverIsBusy()) {
+      setRetryCountdown(CHECK_INTERVAL_SEC)
+      return true
+    }
     inFlightRef.current = true
     setIsChecking(true)
 
@@ -42,7 +51,7 @@ export function useServerStatus() {
       if (isVercel && !targetUrl && !localDemo) {
         const beaconUrl = await fetchBeaconServerUrl()
         if (beaconUrl) {
-          const beaconHealth = await checkServerHealth(beaconUrl, 6000)
+          const beaconHealth = await checkServerHealth(beaconUrl, 12000)
           if (beaconHealth.ok) {
             setServerBaseUrl(beaconUrl)
             setServerUrlState(beaconUrl)
@@ -51,12 +60,12 @@ export function useServerStatus() {
       }
 
       let activeUrl = targetUrl || getServerBaseUrl()
-      let res = await checkServerHealth(activeUrl, 6000)
+      let res = await checkServerHealth(activeUrl, 12000)
 
       if (!res.ok && !localDemo) {
         const discovered = await fetchBeaconServerUrl()
         if (discovered && discovered !== activeUrl) {
-          const discoveredHealth = await checkServerHealth(discovered, 6000)
+          const discoveredHealth = await checkServerHealth(discovered, 12000)
           if (discoveredHealth.ok) {
             activeUrl = discovered
             setServerBaseUrl(discovered)
@@ -66,8 +75,15 @@ export function useServerStatus() {
         }
       }
 
-      setIsOnline(res.ok)
-      setLastError(res.ok ? null : res.error ?? 'Server unreachable')
+      if (res.ok) {
+        failuresRef.current = 0
+        setIsOnline(true)
+        setLastError(null)
+      } else {
+        failuresRef.current += 1
+        setLastError(res.error ?? 'Server unreachable')
+        setIsOnline(failuresRef.current < FAILURES_BEFORE_OFFLINE)
+      }
       setLastCheckedAt(Date.now())
       setRetryCountdown(CHECK_INTERVAL_SEC)
       return res.ok
@@ -75,7 +91,7 @@ export function useServerStatus() {
       setIsChecking(false)
       inFlightRef.current = false
     }
-  }, [isOnline])
+  }, [])
 
   // Listen for server URL changes from beacon or manual entry
   useEffect(() => {
@@ -113,6 +129,6 @@ export function useServerStatus() {
     lastError,
     serverUrl,
     retryCountdown,
-    checkNow: performCheck,
+    checkNow: () => performCheck(undefined, true),
   }
 }

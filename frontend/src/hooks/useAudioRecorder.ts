@@ -394,7 +394,22 @@ export function useAudioRecorder(sessionId: string | null): AudioRecorder {
       const recovered = failedPiecesRef.current
       failedPiecesRef.current = []
       pieceErrorRef.current = null
-      const parts = [...recovered]
+      // Send each dropped piece on its own. One combined file is large enough
+      // for the tunnel to cut the connection, which used to discard the rest
+      // of the consultation.
+      const stillFailed: Float32Array[] = []
+      for (const samples of recovered) {
+        const retry = new File([encodeWav(samples, TARGET_SAMPLE_RATE)], `piece-retry-${Date.now()}.wav`, {
+          type: 'audio/wav',
+        })
+        try {
+          await api.uploadRecording(sessionId, retry, { final: false })
+        } catch (err) {
+          stillFailed.push(samples)
+          pieceErrorRef.current = err as Error
+        }
+      }
+      const parts = [...stillFailed]
       if (recorded) parts.push(pcmFromWav(recorded.wav))
       const merged = concatSamples(parts.filter((part) => part.length > 0))
       const file = new File([encodeWav(merged, TARGET_SAMPLE_RATE)], `recording-${Date.now()}.wav`, {

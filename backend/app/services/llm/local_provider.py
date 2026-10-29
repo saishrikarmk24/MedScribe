@@ -594,6 +594,11 @@ class LocalLLMProvider(LLMProvider):
             for s in clean_segments
             if s.get("ref") and s.get("text")
         }
+        originals = {
+            str(s.get("ref", "")): str(s.get("text", ""))
+            for s in clean_segments
+            if s.get("ref") and s.get("text")
+        }
         roles = {str(s.get("ref", "")): str(s.get("role", "")).upper() for s in clean_segments}
         stop = {
             "the", "and", "for", "with", "was", "has", "have", "had", "not", "patient", "reports",
@@ -603,8 +608,19 @@ class LocalLLMProvider(LLMProvider):
             section = getattr(result.note, key, None)
             if not section or not section.text or section.source_segment_ids:
                 continue
-            words = set(re.findall(r"\w{4,}", section.text.lower())) - stop
+            lowered = section.text.lower()
+            words = set(re.findall(r"\w{4,}", lowered)) - stop
             refs = [ref for ref, text in seg_dict.items() if any(word in text for word in words)]
+            if not refs and key in ("chief_complaint", "history_of_present_illness"):
+                # An English complaint such as "headache" is the reading of a
+                # Tamil line. Cite that line instead of flagging the section.
+                for ref, original in originals.items():
+                    readings = [
+                        english.split("/")[0].strip().lower()
+                        for english in colloquial_glossary(original).values()
+                    ]
+                    if any(reading and reading in lowered for reading in readings):
+                        refs.append(ref)
             if key in ("assessment", "plan", "follow_up"):
                 doctor_refs = [ref for ref in refs if roles.get(ref) == "DOCTOR"]
                 refs = doctor_refs or refs

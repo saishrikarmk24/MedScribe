@@ -616,6 +616,26 @@ class SessionPipeline:
             return False
         return await self.run_ai_update(runtime)
 
+    def schedule_final_note(self, runtime: SessionRuntime) -> None:
+        """Write the finished note off the HTTP request.
+
+        The last upload used to wait for Gemma. On the Kaggle tunnel that wait
+        is long enough for Cloudflare to drop the connection, so the browser
+        reported "Failed to fetch" and the rest of the recording never landed.
+        """
+
+        async def _final() -> None:
+            session_id_var.set(runtime.session_id)
+            try:
+                await self.run_ai_update(runtime, force=True, final=True)
+            except Exception:
+                logger.exception("final_note_failed", extra={"session_id": runtime.session_id})
+
+        previous = runtime.ai_task
+        runtime.ai_task = asyncio.create_task(_final(), name=f"final-note-{runtime.reference}")
+        if previous is not None and previous is not runtime.ai_task and not previous.done():
+            previous.cancel()
+
     def schedule_ai_update(self, runtime: SessionRuntime) -> None:
         """Batched LLM update off the request path; at most one runs per session."""
         if runtime.ai_task and not runtime.ai_task.done():

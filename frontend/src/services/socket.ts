@@ -7,6 +7,7 @@
  */
 
 import { WS_BASE } from '@/constants'
+import { getWsUrl } from '@/services/serverConfig'
 import type { SocketEvent } from '@/types'
 
 export type ConnectionState = 'connecting' | 'open' | 'closed' | 'reconnecting'
@@ -34,8 +35,7 @@ export class SessionSocket {
 
   private url(): string {
     if (WS_BASE) return `${WS_BASE}/ws/sessions/${this.sessionId}`
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/ws/sessions/${this.sessionId}`
+    return getWsUrl(`/sessions/${this.sessionId}`)
   }
 
   connect(): void {

@@ -110,11 +110,11 @@ async def upload_recording(
             detail={"segments": [], "asr_provider": runtime.asr.name, "bytes": len(data)},
         )
 
-    await pipeline.run_ai_update(runtime, force=True, final=True)
+    pipeline.schedule_final_note(runtime)
 
     return Acknowledgement(
         ok=True,
-        message=f"Transcribed {file.filename or 'recording'} and generated clinical note.",
+        message=f"Transcribed {file.filename or 'recording'}. The clinical note is being written.",
         detail={
             "segments": [segment.ref for segment in segments],
             "asr_provider": runtime.asr.name,

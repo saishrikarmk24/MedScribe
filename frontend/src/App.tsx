@@ -3,7 +3,9 @@ import { Route, Routes } from 'react-router-dom'
 
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { ServerOfflineScreen } from '@/components/system/ServerOfflineScreen'
 import { ToastHost } from '@/components/ui/ToastHost'
+import { useServerStatus } from '@/hooks/useServerStatus'
 import { AdminDoctorsPage } from '@/pages/AdminDoctorsPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { GMeetRecordPage } from '@/pages/GMeetRecordPage'
@@ -19,6 +21,7 @@ import { useAuthStore } from '@/store/authStore'
 
 export function App() {
   const initAuth = useAuthStore((s) => s.initAuth)
+  const server = useServerStatus()
 
   useEffect(() => {
     void initAuth()
@@ -26,6 +29,15 @@ export function App() {
 
   return (
     <>
+      {server.isOnline ? null : (
+        <ServerOfflineScreen
+          isChecking={server.isChecking}
+          lastError={server.lastError}
+          serverUrl={server.serverUrl}
+          retryCountdown={server.retryCountdown}
+          onRetry={server.checkNow}
+        />
+      )}
       <Routes>
         <Route path="/login" element={<LoginPage />} />
 

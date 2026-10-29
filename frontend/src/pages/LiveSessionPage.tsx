@@ -112,6 +112,20 @@ export function LiveSessionPage() {
     try {
       await recorder.stop()
       await refresh()
+      // The server accepts the audio first and writes the note afterwards, so a
+      // dropped tunnel no longer cancels the consultation. Pull until the note lands.
+      const started = Date.now()
+      const before = useSessionStore.getState().note?.updated_at
+      const pull = async () => {
+        while (Date.now() - started < 90_000) {
+          await new Promise((resolve) => setTimeout(resolve, 3000))
+          if (useSessionStore.getState().sessionId !== id) return
+          await useSessionStore.getState().refresh()
+          const updated = useSessionStore.getState().note?.updated_at
+          if (updated && updated !== before) return
+        }
+      }
+      void pull()
     } catch (err) {
       pushToast({ kind: 'error', title: 'Could not stop recording', detail: (err as Error).message })
     }
